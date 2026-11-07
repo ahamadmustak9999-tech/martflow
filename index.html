@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>MartFlow - Retail OS</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- EmailJS CDN for Free Email OTP -->
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
   <style>
     body.theme-light {
       --bg-base: #f1f5f9;
@@ -66,10 +69,7 @@
       padding: 0.65rem 0.85rem;
       font-size: 0.825rem;
     }
-    .form-input:focus {
-      border-color: #2563eb;
-      outline: none;
-    }
+    .form-input:focus { border-color: #2563eb; outline: none; }
     .ui-label { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; }
     .ui-subtext { color: var(--text-muted); font-size: 0.725rem; }
 
@@ -114,6 +114,20 @@
     }
     .auth-green-btn:hover { background-color: #059669; }
 
+    @keyframes alertPulseGlow {
+      0%, 100% {
+        background-color: rgba(180, 83, 9, 0.4);
+        border-color: rgba(245, 158, 11, 0.8);
+      }
+      50% {
+        background-color: rgba(220, 38, 38, 0.25);
+        border-color: rgba(239, 68, 68, 0.5);
+      }
+    }
+    .expiry-alert-blink {
+      animation: alertPulseGlow 1.5s infinite ease-in-out;
+    }
+
     @media print {
       body { background-color: #ffffff !important; color: #000000 !important; }
       body * { visibility: hidden !important; }
@@ -130,7 +144,18 @@
 </head>
 <body class="theme-dark min-h-screen flex flex-col pb-16 select-none">
 
-  <!-- AUTH OVERLAY -->
+  <!-- ================= 7-DAY EXPIRY ALERT BANNER ================= -->
+  <div id="sub-warning-banner" class="hidden expiry-alert-blink px-4 py-2 border-b flex items-center justify-center text-xs z-40">
+    <div class="flex items-center gap-2 text-center">
+      <span class="text-base animate-bounce">⚠️</span>
+      <div>
+        <span class="font-bold text-amber-300">Subscription Alert:</span>
+        <span class="text-slate-100 ml-1">Aapka plan <strong id="banner-time-left" class="text-amber-300 font-mono underline font-bold">7 din</strong> me expire hone wala hai! Billing band hone se bachane ke liye plan renew karwayein.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AUTH OVERLAY ================= -->
   <div id="auth-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
     <div class="auth-box-card p-6 max-w-sm w-full space-y-4">
       <div class="text-center space-y-1">
@@ -138,14 +163,16 @@
         <p class="text-xs text-slate-400 font-medium">Cloud Retail POS & Store Management</p>
       </div>
 
+      <!-- Segment Tabs -->
       <div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#111927] border border-[#26354f]">
-        <button id="btn-tab-shop-login" onclick="setAuthTab('SHOP_LOGIN')" class="py-2 rounded-lg text-xs font-bold transition bg-[#0d1424] text-slate-300">Log In</button>
-        <button id="btn-tab-shop-reg" onclick="setAuthTab('SHOP_REG')" class="py-2 rounded-lg text-xs font-bold transition bg-emerald-500 text-slate-950 shadow">Register Dukan</button>
+        <button id="btn-tab-shop-login" onclick="setAuthTab('SHOP_LOGIN')" class="py-2 rounded-lg text-xs font-bold transition bg-blue-600 text-white shadow">Log In</button>
+        <button id="btn-tab-shop-reg" onclick="setAuthTab('SHOP_REG')" class="py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white">Register Dukan</button>
         <button id="btn-tab-admin-login" onclick="setAuthTab('ADMIN_LOGIN')" class="py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white">Super Admin</button>
       </div>
 
+      <!-- Form Inputs -->
       <div class="space-y-3 pt-1">
-        <div id="auth-reg-extra" class="space-y-3">
+        <div id="auth-reg-extra" class="space-y-3 hidden">
           <div>
             <label class="block text-xs font-medium text-slate-400 mb-1">Store / Dukan Name</label>
             <input type="text" id="auth-store-name" value="" autocomplete="off" class="auth-input">
@@ -163,26 +190,68 @@
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-400 mb-1" id="label-auth-pass">Master Password</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-medium text-slate-400" id="label-auth-pass">Master Password</label>
+            <button id="btn-forgot-pass-trigger" type="button" onclick="openForgotModal()" class="text-[11px] text-blue-400 hover:underline">Forgot Password?</button>
+          </div>
           <input type="password" id="auth-password-input" value="" autocomplete="off" class="auth-input">
         </div>
       </div>
 
-      <button id="btn-auth-submit" onclick="handleAuthSubmit()" class="auth-green-btn text-sm mt-2 shadow-lg shadow-emerald-900/30">
-        Register & Open Store (7 Days Free)
+      <button id="btn-auth-submit" onclick="handleAuthSubmit()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition text-sm mt-2 shadow-lg shadow-blue-900/30">
+        Log In to Store
       </button>
 
       <p id="auth-error-msg" class="text-rose-400 text-xs font-medium text-center min-h-[16px]"></p>
     </div>
   </div>
 
-  <!-- LOCKED MODAL -->
+  <!-- ================= FORGOT PASSWORD / EMAIL OTP MODAL ================= -->
+  <div id="modal-forgot-password" class="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="auth-box-card p-6 max-w-sm w-full space-y-4">
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">🔑 Reset Password</h3>
+        <button onclick="closeForgotModal()" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+
+      <div id="forgot-step-1" class="space-y-3">
+        <p class="text-xs text-slate-300">Apna registered store email daalein, verification code (OTP) mil jayega.</p>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">Registered Store Email</label>
+          <input type="email" id="forgot-email" placeholder="dukan@gmail.com" class="auth-input">
+        </div>
+        <button onclick="sendOtpCode()" id="btn-send-otp" class="auth-green-btn text-xs font-bold py-3">Send Verification Code (OTP)</button>
+      </div>
+
+      <div id="forgot-step-2" class="space-y-3 hidden">
+        <div class="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-center">
+          <p class="text-xs text-emerald-400 font-semibold" id="forgot-status-text">OTP email par bhej diya gaya hai!</p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">6-Digit OTP Code</label>
+          <input type="number" id="forgot-otp" placeholder="e.g. 482910" class="auth-input font-mono tracking-widest text-center text-lg font-bold">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1">New Password</label>
+          <input type="password" id="forgot-new-pass" placeholder="Naya password likhein" class="auth-input">
+        </div>
+        <button onclick="verifyOtpAndChangePassword()" class="auth-green-btn text-xs font-bold py-3">Verify OTP & Login Store</button>
+        <div class="pt-2 text-center">
+          <button onclick="resetForgotSteps()" class="text-[11px] text-slate-400 hover:text-white underline">Resend OTP</button>
+        </div>
+      </div>
+
+      <p id="forgot-err-msg" class="text-rose-400 text-xs font-medium text-center min-h-[16px]"></p>
+    </div>
+  </div>
+
+  <!-- ================= SUBSCRIPTION LOCKED OVERLAY ================= -->
   <div id="modal-sub-locked" class="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
     <div class="custom-card rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
       <div class="text-4xl">🔒</div>
       <div>
-        <h3 class="text-lg font-bold text-rose-500">7-Day Free Trial Expired</h3>
-        <p class="ui-subtext mt-1">Aapki dukan ka 7 din ka free trial khatam ho gaya hai. Aap automatically logout ho chuke hain.</p>
+        <h3 class="text-lg font-bold text-rose-500">Subscription Expired / Suspended</h3>
+        <p class="ui-subtext mt-1">Aapki dukan ki validity khatam ho chuki hai. Aap automatically logout ho chuke hain.</p>
       </div>
       <div class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
         <span class="text-[10px] ui-subtext">Monthly Renewal Cost:</span>
@@ -195,15 +264,15 @@
     </div>
   </div>
 
-  <!-- SUPER ADMIN MODAL -->
+  <!-- ================= SUPER ADMIN CONTROL PANEL (OWNER SUITE - Z-50) ================= -->
   <div id="modal-super-admin" class="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
-    <div class="custom-card rounded-3xl p-5 max-w-4xl w-full max-h-[90vh] flex flex-col space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
+    <div class="custom-card rounded-3xl p-5 max-w-5xl w-full max-h-[90vh] flex flex-col space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
       <div class="flex items-center justify-between pb-3 border-b" style="border-color: var(--border-color)">
         <div class="flex items-center gap-2">
           <span class="text-xl">👑</span>
           <div>
             <h3 class="font-bold text-sm" style="color: var(--text-main)">MartFlow Master Control Panel (Owner)</h3>
-            <p class="ui-subtext">Manage tenant subscriptions, pricing, login times & active/suspend states.</p>
+            <p class="ui-subtext">Tenant Passwords, Active OTPs, Login Tracker & Custom Calendar Expiry Master.</p>
           </div>
         </div>
         <div class="flex items-center gap-2">
@@ -212,15 +281,17 @@
         </div>
       </div>
 
+      <!-- Stores Table -->
       <div class="flex-1 overflow-y-auto custom-card rounded-2xl">
         <table class="w-full text-left text-xs">
           <thead class="border-b" style="background-color: var(--card-sub); border-color: var(--border-color); color: var(--text-muted)">
             <tr>
-              <th class="px-4 py-3 font-bold">Store Details & Last Login</th>
-              <th class="px-3 py-3 font-bold">Monthly Price</th>
+              <th class="px-4 py-3 font-bold">Store & Credentials</th>
+              <th class="px-3 py-3 font-bold">Live OTP</th>
+              <th class="px-3 py-3 font-bold">Price</th>
               <th class="px-3 py-3 font-bold">Status</th>
-              <th class="px-3 py-3 font-bold">Trial / Due Date</th>
-              <th class="px-4 py-3 text-right font-bold">Action</th>
+              <th class="px-3 py-3 font-bold">Expiry Date & Time</th>
+              <th class="px-4 py-3 text-right font-bold">Owner Actions</th>
             </tr>
           </thead>
           <tbody id="admin-stores-table-body" class="divide-y" style="border-color: var(--border-color)"></tbody>
@@ -229,7 +300,35 @@
     </div>
   </div>
 
-  <!-- HEADER -->
+  <!-- ================= MODAL: CUSTOM CALENDAR & TIME PICKER (Z-[60]) ================= -->
+  <div id="modal-custom-expiry" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl border" style="border-color: var(--border-color); background-color: var(--card-bg);">
+      <div class="flex items-center justify-between pb-2 border-b" style="border-color: var(--border-color)">
+        <div>
+          <h3 class="font-bold text-sm" style="color: var(--text-main)">📅 Set Validity Date & Time</h3>
+          <p class="ui-subtext font-bold text-blue-400" id="custom-expiry-store-name">Store Name</p>
+        </div>
+        <button onclick="closeCustomExpiryModal()" class="ui-subtext hover:text-red-500 font-bold p-1">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="ui-label block mb-1.5">Select Expiry Date & Exact Time (Calendar):</label>
+          <input type="datetime-local" id="custom-expiry-input" class="w-full form-input font-mono font-bold text-sm py-2.5">
+        </div>
+        <div class="p-3 rounded-2xl bg-blue-600/10 border border-blue-500/30 text-[11px] text-blue-300 space-y-1">
+          <p>💡 <strong>Owner Control:</strong> Is chuni hui tarikh aur waqt par dukandar ka POS automatically suspend/lock ho jayega.</p>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeCustomExpiryModal()" class="flex-1 py-2.5 rounded-xl custom-card text-xs font-bold" style="color: var(--text-main)">Cancel</button>
+        <button onclick="commitCustomExpiry()" class="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md shadow-purple-600/30">Save Date & Time</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
   <header class="custom-card sticky top-0 z-30 px-4 py-2.5 flex items-center justify-between border-b shadow-sm">
     <div class="flex items-center gap-3">
       <div class="h-8 w-8 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-md shadow-blue-500/30">
@@ -246,7 +345,7 @@
           </h1>
           <span class="text-[10px] font-bold flex items-center gap-1 px-2.5 py-0.5 rounded-full border"
                 style="background-color: var(--badge-reg-bg); color: var(--badge-reg-txt); border-color: var(--badge-reg-border)">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> <span id="header-plan-display">7d Trial</span>
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> <span id="header-plan-display">Active</span>
           </span>
         </div>
         <p class="ui-subtext" id="current-clock">Loading...</p>
@@ -260,7 +359,7 @@
     </div>
   </header>
 
-  <!-- NAVIGATION -->
+  <!-- Navigation Bar -->
   <div class="px-4 py-2 flex items-center justify-between border-b" style="border-color: var(--border-color); background-color: var(--card-sub)">
     <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
       <button onclick="switchView('billing')" id="tab-btn-billing" class="px-3.5 py-1.5 rounded-xl text-xs nav-tab-active whitespace-nowrap transition">Counter POS</button>
@@ -271,7 +370,7 @@
     <span class="text-[10px] font-mono hidden md:inline" style="color: var(--text-muted)">T1 · Cloud Synced</span>
   </div>
 
-  <!-- MAIN VIEW -->
+  <!-- Main View Container -->
   <main class="flex-1 max-w-5xl w-full mx-auto p-4 space-y-4">
     <!-- 1. COUNTER POS VIEW -->
     <div id="view-billing" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -345,12 +444,12 @@
       </div>
     </div>
 
-    <!-- 2. INVENTORY VIEW -->
+    <!-- 2. INVENTORY MASTER VIEW -->
     <div id="view-inventory" class="hidden space-y-4">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="text-lg font-bold" style="color: var(--text-main)">Inventory</h2>
-          <p class="ui-subtext">Master stock with live margin, stock value and reason-stamped adjustments.</p>
+          <p class="ui-subtext">Master stock with live margin, stock value and adjustments.</p>
         </div>
         <div class="flex items-center gap-2">
           <button onclick="exportCSV()" class="px-3 py-1.5 rounded-xl custom-card text-xs font-bold transition hover:border-blue-500" style="color: var(--text-main)">↓ Export CSV</button>
@@ -431,6 +530,7 @@
         </button>
       </div>
 
+      <!-- CARD 1: STORE BRANDING -->
       <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
         <div class="pb-2 border-b" style="border-color: var(--border-color)">
           <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🏬 Store branding</h3>
@@ -438,39 +538,37 @@
         <div class="space-y-3 text-xs">
           <div>
             <label class="block ui-label mb-1">Store name *</label>
-            <input type="text" id="setting-store-name" placeholder="Nova Mart Supermarket" class="w-full form-input font-medium">
+            <input type="text" id="setting-store-name" class="w-full form-input font-medium" placeholder="Martflow">
           </div>
           <div>
             <label class="block ui-label mb-1">Address</label>
-            <textarea id="setting-store-address" rows="3" placeholder="Shop Address..." class="w-full form-input resize-none font-medium"></textarea>
+            <textarea id="setting-store-address" rows="3" class="w-full form-input resize-none font-medium" placeholder="Shop Address..."></textarea>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block ui-label mb-1">Phone</label>
-              <input type="text" id="setting-store-phone" placeholder="+91 98220 11223" class="w-full form-input font-medium">
-            </div>
-            <div>
-              <label class="block ui-label mb-1">GSTIN / Tax ID (Optional)</label>
-              <input type="text" id="setting-store-gst" placeholder="27AABCU9603R1Z" class="w-full form-input font-medium">
-            </div>
+          <div>
+            <label class="block ui-label mb-1">Phone</label>
+            <input type="text" id="setting-store-phone" class="w-full form-input font-medium" placeholder="+91 98220 11223">
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label class="block ui-label mb-1">Currency symbol</label>
-              <select id="setting-store-currency" class="w-full form-input cursor-pointer font-medium">
-                <option value="₹">₹ (INR)</option>
-                <option value="$">$ (USD)</option>
-                <option value="Rp">Rp (IDR)</option>
-              </select>
-            </div>
-            <div>
-              <label class="block ui-label mb-1">UPI VPA (for QR / Instant Pay)</label>
-              <input type="text" id="setting-store-upi" placeholder="novamart@upi" class="w-full form-input font-medium">
-            </div>
+          <div>
+            <label class="block ui-label mb-1">GSTIN / Tax ID (Optional)</label>
+            <input type="text" id="setting-store-gst" class="w-full form-input font-medium" placeholder="27AABCU9603R1Z">
+          </div>
+          <div>
+            <label class="block ui-label mb-1">Currency symbol</label>
+            <select id="setting-currency" class="w-full form-input font-medium cursor-pointer">
+              <option value="₹">₹ (INR)</option>
+              <option value="$">$ (USD)</option>
+              <option value="€">€ (EUR)</option>
+              <option value="£">£ (GBP)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block ui-label mb-1">UPI VPA (for QR / Instant Pay)</label>
+            <input type="text" id="setting-store-upi" class="w-full form-input font-medium" placeholder="novamart@upi">
           </div>
         </div>
       </div>
 
+      <!-- CARD 2: RECEIPT CUSTOMIZER -->
       <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
         <div class="pb-2 border-b" style="border-color: var(--border-color)">
           <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🧾 Receipt customizer</h3>
@@ -478,23 +576,24 @@
         <div class="space-y-3 text-xs">
           <div>
             <label class="block ui-label mb-1">Header text</label>
-            <input type="text" id="setting-receipt-header" placeholder="Nova Mart Supermarket" class="w-full form-input font-medium">
+            <input type="text" id="setting-receipt-header" class="w-full form-input font-medium" placeholder="Mustak Store">
           </div>
           <div>
             <label class="block ui-label mb-1">Footer / terms</label>
-            <textarea id="setting-receipt-footer" rows="2" placeholder="Thank you for shopping with us!" class="w-full form-input resize-none font-medium"></textarea>
+            <input type="text" id="setting-receipt-footer" class="w-full form-input font-medium" placeholder="Thank you for shopping with us!">
           </div>
           <div>
             <label class="block ui-label mb-1">Return policy</label>
-            <textarea id="setting-receipt-policy" rows="2" placeholder="Returns accepted within 7 days with the original bill." class="w-full form-input resize-none font-medium"></textarea>
+            <input type="text" id="setting-receipt-policy" class="w-full form-input font-medium" placeholder="Returns accepted within 7 days with the original bill.">
           </div>
-          <div class="flex items-center gap-2.5 pt-1">
+          <div class="flex items-center gap-2 pt-1">
             <input type="checkbox" id="setting-tax-split" checked class="w-4 h-4 rounded text-blue-600 cursor-pointer">
-            <label for="setting-tax-split" class="ui-label cursor-pointer text-xs">Break tax into CGST / SGST on receipts</label>
+            <label for="setting-tax-split" class="ui-label cursor-pointer font-semibold">Break tax into CGST / SGST on receipts</label>
           </div>
         </div>
       </div>
 
+      <!-- CARD 3: LICENSE & TRIAL STATUS -->
       <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
         <div class="pb-2 border-b" style="border-color: var(--border-color)">
           <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🔑 License & Trial Status</h3>
@@ -502,11 +601,11 @@
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
             <span class="ui-label block mb-1">Plan</span>
-            <span id="setting-lic-plan" class="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 dark:bg-slate-800 dark:text-stone-200 font-bold tracking-wider inline-block">7-DAY TRIAL</span>
+            <span id="setting-lic-plan" class="px-2.5 py-1 rounded-lg bg-blue-950 text-blue-300 font-bold tracking-wider inline-block">7-DAY TRIAL</span>
           </div>
           <div>
             <span class="ui-label block mb-1">License key</span>
-            <span class="font-mono font-bold" style="color: var(--text-main)">MF-7DAY-TRIAL-PASS</span>
+            <span id="setting-lic-key" class="font-mono text-slate-300 font-bold">MF-7DAY-TRIAL-PASS</span>
           </div>
           <div>
             <span class="ui-label block mb-1">Expires / Due</span>
@@ -514,11 +613,39 @@
           </div>
           <div>
             <span class="ui-label block mb-1">Status</span>
-            <span id="setting-lic-status" class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 text-[10px] font-bold">active</span>
+            <span id="setting-lic-status" class="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-bold">ACTIVE</span>
           </div>
-          <div class="col-span-2 pt-1 border-t border-slate-800">
-            <span class="ui-label block mb-0.5">Current Session Login Timestamp:</span>
-            <span id="setting-lic-login" class="font-mono text-[11px] text-blue-400">Loading...</span>
+        </div>
+        <div class="pt-2 border-t text-xs" style="border-color: var(--border-color)">
+          <span class="ui-label block mb-0.5">Current Session Login Timestamp:</span>
+          <span id="setting-lic-login" class="font-mono text-[11px] text-blue-400">Loading...</span>
+        </div>
+      </div>
+
+      <!-- CARD 4: CHANGE STORE PASSWORD (NAYA FEATURE) -->
+      <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
+        <div class="pb-2 border-b" style="border-color: var(--border-color)">
+          <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🔐 Security & Change Password</h3>
+        </div>
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block ui-label mb-1">Current Password *</label>
+            <input type="password" id="change-current-pass" class="w-full form-input font-medium" placeholder="Purana password likhein">
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block ui-label mb-1">New Password *</label>
+              <input type="password" id="change-new-pass" class="w-full form-input font-medium" placeholder="Naya password likhein">
+            </div>
+            <div>
+              <label class="block ui-label mb-1">Confirm New Password *</label>
+              <input type="password" id="change-confirm-pass" class="w-full form-input font-medium" placeholder="Naya password dubara likhein">
+            </div>
+          </div>
+          <div class="pt-1">
+            <button onclick="changeStorePassword()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition">
+              Update Password
+            </button>
           </div>
         </div>
       </div>
@@ -526,7 +653,7 @@
   </main>
 
   <!-- MODAL: VIEW BILL DETAILS -->
-  <div id="modal-invoice-detail" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div id="modal-invoice-detail" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4 hidden">
     <div class="custom-card rounded-3xl p-5 max-w-md w-full space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
       <div class="flex items-center justify-between pb-2.5 border-b" style="border-color: var(--border-color)">
         <div>
@@ -537,18 +664,9 @@
       </div>
 
       <div class="p-3 rounded-xl border space-y-1.5 text-xs" style="background-color: var(--card-sub); border-color: var(--border-color)">
-        <div class="flex justify-between">
-          <span class="ui-label">Customer:</span>
-          <span class="font-bold" id="detail-cust-name" style="color: var(--text-main)">-</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="ui-label">Phone:</span>
-          <span class="font-mono font-semibold" id="detail-cust-phone" style="color: var(--text-main)">N/A</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="ui-label">Payment:</span>
-          <span class="font-bold text-blue-600 dark:text-blue-400" id="detail-pay-mode">CASH</span>
-        </div>
+        <div class="flex justify-between"><span class="ui-label">Customer:</span><span class="font-bold" id="detail-cust-name">-</span></div>
+        <div class="flex justify-between"><span class="ui-label">Phone:</span><span class="font-mono font-semibold" id="detail-cust-phone">N/A</span></div>
+        <div class="flex justify-between"><span class="ui-label">Payment:</span><span class="font-bold text-blue-600 dark:text-blue-400" id="detail-pay-mode">CASH</span></div>
       </div>
 
       <div class="space-y-1.5">
@@ -563,16 +681,14 @@
         </div>
         <div class="flex gap-2">
           <button onclick="closeInvoiceModal()" class="px-3.5 py-2 rounded-xl custom-card text-xs font-bold transition hover:border-blue-500" style="color: var(--text-main)">Close</button>
-          <button onclick="reprintActiveInvoice()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30">
-            🖨️ Re-Print
-          </button>
+          <button onclick="reprintActiveInvoice()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30">🖨️ Re-Print</button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- MODAL: ADJUST STOCK -->
-  <div id="modal-adjust-stock" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div id="modal-adjust-stock" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] flex items-center justify-center p-4 hidden">
     <div class="custom-card rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl border" style="border-color: var(--border-color)">
       <div class="flex items-center justify-between pb-2 border-b" style="border-color: var(--border-color)">
         <div>
@@ -602,9 +718,7 @@
           <label class="ui-label">Note</label>
           <input type="text" id="adjust-note" placeholder="Optional context" class="w-full form-input mt-1">
         </div>
-        <div class="custom-card rounded-xl p-2.5 text-center font-mono font-bold" style="color: var(--text-main)" id="adjust-preview-badge">
-          0 units after adjustment
-        </div>
+        <div class="custom-card rounded-xl p-2.5 text-center font-mono font-bold" style="color: var(--text-main)" id="adjust-preview-badge">0 units after adjustment</div>
       </div>
 
       <div class="flex gap-2 pt-2">
@@ -615,13 +729,11 @@
   </div>
 
   <!-- MODAL: EDIT / ADD PRODUCT -->
-  <div id="modal-product-editor" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="custom-card rounded-3xl p-5 max-w-md w-full space-y-3 shadow-2xl border" style="border-color: var(--border-color)">
+  <div id="modal-product-editor" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-[60] flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-5 max-w-md w-full space-y-3 shadow-2xl border" style="border-color: var(--border-color); background-color: var(--card-bg);">
       <div class="flex items-center justify-between pb-2 border-b" style="border-color: var(--border-color)">
-        <div>
-          <h3 class="font-bold text-sm" id="editor-title" style="color: var(--text-main)">Edit Product</h3>
-        </div>
-        <button onclick="toggleModal('modal-product-editor')" class="ui-subtext hover:text-red-500 font-bold">✕</button>
+        <h3 class="font-bold text-sm" id="editor-title" style="color: var(--text-main)">Edit Product</h3>
+        <button onclick="toggleModal('modal-product-editor')" class="ui-subtext hover:text-red-500 font-bold p-1">✕</button>
       </div>
 
       <div class="space-y-2.5 text-xs">
@@ -635,29 +747,20 @@
             <input type="text" id="prod-barcode" placeholder="8901058000012" class="w-full form-input mt-1 font-mono">
           </div>
         </div>
-
         <div>
           <label class="ui-label">Product name *</label>
           <input type="text" id="prod-name" placeholder="Aashirvaad Atta 5kg" class="w-full form-input mt-1 font-bold">
         </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="ui-label">Category</label>
-            <select id="prod-category" class="w-full form-input mt-1 font-medium">
-              <option value="Grocery">Grocery</option>
-              <option value="Dairy">Dairy</option>
-              <option value="Beverages">Beverages</option>
-              <option value="Snacks">Snacks</option>
-              <option value="Household">Household</option>
-            </select>
-          </div>
-          <div>
-            <label class="ui-label">Tax %</label>
-            <input type="number" id="prod-tax" value="5" class="w-full form-input mt-1 font-bold">
-          </div>
+        <div>
+          <label class="ui-label">Category</label>
+          <select id="prod-category" class="w-full form-input mt-1 font-medium">
+            <option value="Grocery">Grocery</option>
+            <option value="Dairy">Dairy</option>
+            <option value="Beverages">Beverages</option>
+            <option value="Snacks">Snacks</option>
+            <option value="Household">Household</option>
+          </select>
         </div>
-
         <div class="grid grid-cols-2 gap-2">
           <div>
             <label class="ui-label">Cost price</label>
@@ -668,51 +771,54 @@
             <input type="number" id="prod-price" placeholder="295" class="w-full form-input mt-1 font-bold">
           </div>
         </div>
-
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="ui-label">Current stock *</label>
-            <input type="number" id="prod-stock" placeholder="63" class="w-full form-input mt-1 font-bold">
-          </div>
-          <div>
-            <label class="ui-label">Reorder level</label>
-            <input type="number" id="prod-reorder" placeholder="15" class="w-full form-input mt-1 font-bold">
-          </div>
+        <div>
+          <label class="ui-label">Current stock *</label>
+          <input type="number" id="prod-stock" placeholder="63" class="w-full form-input mt-1 font-bold">
         </div>
       </div>
 
       <div class="flex gap-2 pt-2">
-        <button onclick="toggleModal('modal-product-editor')" class="flex-1 py-2 rounded-xl custom-card text-xs font-bold" style="color: var(--text-main)">Cancel</button>
-        <button onclick="commitSaveProduct()" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30">Save changes</button>
+        <button onclick="toggleModal('modal-product-editor')" class="flex-1 py-2.5 rounded-xl custom-card text-xs font-bold" style="color: var(--text-main)">Cancel</button>
+        <button onclick="commitSaveProduct()" class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30">Save changes</button>
       </div>
     </div>
   </div>
 
   <div id="printable-receipt-area"></div>
 
-  <!-- SCRIPT -->
+  <!-- ================= JAVASCRIPT ENGINE ================= -->
   <script>
+    // 1. SUPABASE CLIENT
     const SUPABASE_URL = "https://rcofrtcyhjgdsiotkkjq.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_6uFSLPyZ6w-VXAhkXgL5uA_cvFJO73C";
     const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Super Admin Secret Credentials
     const SUPER_ADMIN_EMAIL = "mtkahamad1@gmail.com";
     const SUPER_ADMIN_PASS = "@mustak742214";
+
+    // EmailJS Config
+    const EMAILJS_SERVICE_ID = "service_martflow";
+    const EMAILJS_TEMPLATE_ID = "template_martflow_otp";
+    const EMAILJS_PUBLIC_KEY = "user_martflow_public";
 
     window.currentStore = null;
     window.products = [];
     window.sales = [];
+    window.adminStoresCache = [];
     window.currentTheme = localStorage.getItem('mf_pro_theme') || 'dark';
-    window.authTab = "SHOP_REG";
+    window.authTab = "SHOP_LOGIN";
+    window.activeResetEmail = "";
+    window.activeExpiryStoreId = null;
 
     window.storeConfig = {
-      name: 'MartFlow Store',
+      name: 'Mustak Store',
       address: '',
-      phone: '',
-      gstin: '',
+      phone: '+91 98220 11223',
+      gstin: '27AABCU9603R1Z',
       currency: '₹',
-      upi: '',
-      header: 'MartFlow Store',
+      upi: 'novamart@upi',
+      header: 'Mustak Store',
       footer: 'Thank you for shopping with us!',
       policy: 'Returns accepted within 7 days with the original bill.',
       splitTax: true
@@ -732,6 +838,7 @@
       document.getElementById("auth-error-msg").innerText = "";
     };
 
+    // 2. AUTH TABS
     window.setAuthTab = function(mode) {
       window.authTab = mode;
       window.clearAuthInputs();
@@ -742,6 +849,7 @@
       const maskedEmail = document.getElementById("auth-admin-email-masked");
       const emailLabel = document.getElementById("label-auth-email");
       const passLabel = document.getElementById("label-auth-pass");
+      const forgotTrigger = document.getElementById("btn-forgot-pass-trigger");
 
       const inactiveClass = "py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white";
       document.getElementById("btn-tab-shop-login").className = inactiveClass;
@@ -753,8 +861,9 @@
         regExtra.classList.remove("hidden");
         standardEmail.classList.remove("hidden");
         maskedEmail.classList.add("hidden");
+        forgotTrigger.classList.add("hidden");
         emailLabel.innerText = "Owner Email";
-        passLabel.innerText = "Master Password";
+        passLabel.innerText = "Set Store Password";
         submitBtn.className = "auth-green-btn text-sm mt-2 shadow-lg shadow-emerald-900/30";
         submitBtn.innerText = "Register & Open Store (7 Days Free)";
       } else if (mode === "ADMIN_LOGIN") {
@@ -762,6 +871,7 @@
         regExtra.classList.add("hidden");
         standardEmail.classList.add("hidden");
         maskedEmail.classList.remove("hidden");
+        forgotTrigger.classList.add("hidden");
         emailLabel.innerText = "Master Admin Key / Email";
         passLabel.innerText = "Admin Password";
         submitBtn.className = "w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition text-sm mt-2 shadow-lg shadow-amber-900/30";
@@ -771,6 +881,7 @@
         regExtra.classList.add("hidden");
         standardEmail.classList.remove("hidden");
         maskedEmail.classList.add("hidden");
+        forgotTrigger.classList.remove("hidden");
         emailLabel.innerText = "Owner Email";
         passLabel.innerText = "Master Password";
         submitBtn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition text-sm mt-2 shadow-lg shadow-blue-900/30";
@@ -778,6 +889,7 @@
       }
     };
 
+    // 3. AUTH SUBMIT
     window.handleAuthSubmit = async function() {
       const err = document.getElementById("auth-error-msg");
       err.innerText = "";
@@ -799,7 +911,7 @@
       const pass = document.getElementById("auth-password-input").value;
 
       if (!email || !pass) {
-        err.innerText = "Email aur Password dono enter karein.";
+        err.innerText = "Email aur Password dono likhna zaroori hai.";
         return;
       }
 
@@ -821,6 +933,7 @@
           store_name: storeName,
           owner_email: email,
           owner_phone: phone,
+          password: pass,
           plan_type: "7-Day Trial",
           status: "ACTIVE",
           expires_at: exp.toISOString(),
@@ -828,7 +941,7 @@
         }]).select().single();
 
         if (error) {
-          err.innerText = "Account banne me dikkat: " + error.message;
+          err.innerText = "Registration error: " + error.message;
           return;
         }
 
@@ -840,8 +953,16 @@
         const { data, error } = await client.from("stores").select("*").eq("owner_email", email).maybeSingle();
 
         if (error || !data) {
-          err.innerText = "Yeh email register nahi hai. Pehle 'Register Dukan' karein.";
+          err.innerText = "Yeh email register nahi hai. 'Register Dukan' karein.";
           return;
+        }
+
+        if (data.password && data.password !== pass) {
+          err.innerText = "Galat password! 'Forgot Password?' par tap karke reset karein.";
+          return;
+        } else if (!data.password) {
+          await client.from("stores").update({ password: pass }).eq("id", data.id);
+          data.password = pass;
         }
 
         const expiry = new Date(data.expires_at || Date.now());
@@ -868,43 +989,128 @@
       }
     };
 
+    // 4. FORGOT PASSWORD & OTP
+    window.openForgotModal = function() {
+      document.getElementById("modal-forgot-password").classList.remove("hidden");
+      document.getElementById("forgot-step-1").classList.remove("hidden");
+      document.getElementById("forgot-step-2").classList.add("hidden");
+      document.getElementById("forgot-email").value = document.getElementById("auth-email-input").value || "";
+      document.getElementById("forgot-otp").value = "";
+      document.getElementById("forgot-new-pass").value = "";
+      document.getElementById("forgot-err-msg").innerText = "";
+    };
+
+    window.closeForgotModal = function() {
+      document.getElementById("modal-forgot-password").classList.add("hidden");
+    };
+
+    window.resetForgotSteps = function() {
+      document.getElementById("forgot-step-1").classList.remove("hidden");
+      document.getElementById("forgot-step-2").classList.add("hidden");
+      document.getElementById("forgot-err-msg").innerText = "";
+    };
+
+    window.sendOtpCode = async function() {
+      const email = document.getElementById("forgot-email").value.trim().toLowerCase();
+      const err = document.getElementById("forgot-err-msg");
+      err.innerText = "";
+
+      if (!email) {
+        err.innerText = "Email daalna zaroori hai!";
+        return;
+      }
+
+      const { data: store, error } = await client.from("stores").select("*").eq("owner_email", email).maybeSingle();
+      if (error || !store) {
+        err.innerText = "Yeh email MartFlow me register nahi hai.";
+        return;
+      }
+
+      window.activeResetEmail = email;
+      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+      await client.from("stores").update({ reset_otp: otpCode }).eq("id", store.id);
+
+      try {
+        if (window.emailjs && EMAILJS_SERVICE_ID !== "service_martflow") {
+          await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            to_email: email,
+            store_name: store.store_name,
+            otp_code: otpCode
+          }, EMAILJS_PUBLIC_KEY);
+        }
+      } catch (mailErr) {
+        console.warn("EmailJS notice:", mailErr);
+      }
+
+      document.getElementById("forgot-step-1").classList.add("hidden");
+      document.getElementById("forgot-step-2").classList.remove("hidden");
+      document.getElementById("forgot-status-text").innerText = `OTP sent to ${email}! (Check Inbox/Spam)`;
+    };
+
+    window.verifyOtpAndChangePassword = async function() {
+      const enteredOtp = document.getElementById("forgot-otp").value.trim();
+      const newPass = document.getElementById("forgot-new-pass").value;
+      const err = document.getElementById("forgot-err-msg");
+      err.innerText = "";
+
+      if (!enteredOtp || enteredOtp.length !== 6) {
+        err.innerText = "6-digit OTP code enter karein.";
+        return;
+      }
+      if (!newPass || newPass.length < 4) {
+        err.innerText = "Naya password kam se kam 4 aksharon ka hona chahiye.";
+        return;
+      }
+
+      const { data: store, error } = await client.from("stores").select("*").eq("owner_email", window.activeResetEmail).single();
+
+      if (error || !store) {
+        err.innerText = "Store dhundhne me dikkat aayi. Dubara koshish karein.";
+        return;
+      }
+
+      if (store.reset_otp !== enteredOtp) {
+        err.innerText = "Galat OTP! Sahi code daalein ya Super Admin se maangein.";
+        return;
+      }
+
+      await client.from("stores").update({ 
+        password: newPass, 
+        reset_otp: null,
+        last_login_at: new Date().toISOString()
+      }).eq("id", store.id);
+
+      alert("🎉 Password badal gaya! Aap abhi login ho rahe hain.");
+
+      store.password = newPass;
+      window.currentStore = store;
+      localStorage.setItem("martflow_active_store", JSON.stringify(store));
+      closeForgotModal();
+      document.getElementById("auth-modal").classList.add("hidden");
+      bootStoreSession();
+    };
+
+    // 5. MANUAL LOGOUT
     window.doLogout = function() {
       localStorage.removeItem("martflow_active_store");
       location.reload();
     };
 
-    // 3. STORE SESSION & 7-DAY AUTOMATIC EXPIRY LOGOUT GATE (WITH AUTO-CLAMP TO 7 DAYS)
+    // 6. STORE SESSION & SETTINGS RESTORE
     window.bootStoreSession = async function() {
       if (!window.currentStore) return;
 
       const { data: refreshed } = await client.from("stores").select("*").eq("id", window.currentStore.id).single();
       if (refreshed) {
         window.currentStore = refreshed;
+        localStorage.setItem("martflow_active_store", JSON.stringify(refreshed));
       }
 
-      let expiry = new Date(window.currentStore.expires_at || Date.now());
+      const expiry = new Date(window.currentStore.expires_at || Date.now());
       const now = new Date();
-      let diffMs = expiry - now;
-      let daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-      // CLAMP PURANA 30 DAYS RECORD TO 7 DAYS
-      if (daysLeft > 7) {
-        const forced7Days = new Date();
-        forced7Days.setDate(forced7Days.getDate() + 7);
-        window.currentStore.expires_at = forced7Days.toISOString();
-        window.currentStore.plan_type = "7-Day Trial";
-
-        await client.from("stores").update({ 
-          expires_at: forced7Days.toISOString(), 
-          plan_type: "7-Day Trial" 
-        }).eq("id", window.currentStore.id);
-
-        expiry = forced7Days;
-        diffMs = expiry - now;
-        daysLeft = 7;
-      }
-
-      localStorage.setItem("martflow_active_store", JSON.stringify(window.currentStore));
+      const diffMs = expiry - now;
+      const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
       if (diffMs <= 0 || window.currentStore.status === "SUSPENDED" || window.currentStore.status === "EXPIRED") {
         localStorage.removeItem("martflow_active_store");
@@ -914,24 +1120,53 @@
         return;
       }
 
+      const banner = document.getElementById("sub-warning-banner");
+      if (daysLeft <= 7 && daysLeft > 0) {
+        banner.classList.remove("hidden");
+        document.getElementById("banner-time-left").innerText = daysLeft === 1 ? "aaj / 24 ghante" : `${daysLeft} din`;
+      } else {
+        banner.classList.add("hidden");
+      }
+
+      // Restore saved configs
+      const savedCfg = localStorage.getItem('mf_store_config');
+      if (savedCfg) {
+        try { window.storeConfig = JSON.parse(savedCfg); } catch(e){}
+      }
+      const cfg = window.storeConfig || {};
+
       document.getElementById("header-store-display").innerText = window.currentStore.store_name;
-      document.getElementById("setting-store-name").value = window.currentStore.store_name;
-      document.getElementById("setting-store-phone").value = window.currentStore.owner_phone || "";
-      document.getElementById("setting-receipt-header").value = window.currentStore.store_name;
-
-      document.getElementById("setting-lic-expires").innerText = expiry.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-      document.getElementById("setting-lic-plan").innerText = "7-DAY TRIAL";
-      document.getElementById("setting-lic-status").innerText = window.currentStore.status || "active";
-      document.getElementById("setting-lic-login").innerText = window.currentStore.last_login_at ? new Date(window.currentStore.last_login_at).toLocaleString("en-IN") : "Just now";
-
       document.getElementById("header-plan-display").innerText = `${daysLeft}d Trial Left`;
+
+      // Fill Store Settings Inputs
+      if (document.getElementById("setting-store-name")) {
+        document.getElementById("setting-store-name").value = cfg.name || window.currentStore.store_name || "Martflow";
+        document.getElementById("setting-store-address").value = cfg.address || "";
+        document.getElementById("setting-store-phone").value = cfg.phone || window.currentStore.owner_phone || "+91 98220 11223";
+        document.getElementById("setting-store-gst").value = cfg.gstin || "27AABCU9603R1Z";
+        document.getElementById("setting-currency").value = cfg.currency || "₹";
+        document.getElementById("setting-store-upi").value = cfg.upi || "novamart@upi";
+
+        document.getElementById("setting-receipt-header").value = cfg.header || window.currentStore.store_name || "Mustak Store";
+        document.getElementById("setting-receipt-footer").value = cfg.footer || "Thank you for shopping with us!";
+        document.getElementById("setting-receipt-policy").value = cfg.policy || "Returns accepted within 7 days with the original bill.";
+        document.getElementById("setting-tax-split").checked = cfg.splitTax !== false;
+
+        document.getElementById("setting-lic-expires").innerText = expiry.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById("setting-lic-plan").innerText = window.currentStore.plan_type || "7-DAY TRIAL";
+        document.getElementById("setting-lic-status").innerText = window.currentStore.status || "ACTIVE";
+        document.getElementById("setting-lic-key").innerText = "MF-7DAY-TRIAL-PASS";
+        
+        const loginDate = window.currentStore.last_login_at ? new Date(window.currentStore.last_login_at) : new Date();
+        document.getElementById("setting-lic-login").innerText = loginDate.toLocaleDateString("en-GB") + ", " + loginDate.toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit', second:'2-digit', hour12:true }).toLowerCase();
+      }
 
       await loadCloudInventory();
       await loadCloudSales();
       window.addItemRow();
     };
 
-    // 4. SUPER ADMIN PANEL
+    // 7. SUPER ADMIN PANEL
     window.promptSuperAdminAccess = function() {
       const email = prompt("Enter Super Admin Key / Email:");
       if (!email) return;
@@ -959,56 +1194,122 @@
 
     window.loadAdminStores = async function() {
       const tbody = document.getElementById("admin-stores-table-body");
-      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center ui-subtext">Fetching stores from cloud...</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center ui-subtext">Fetching stores from cloud...</td></tr>`;
 
       const { data: stores, error } = await client.from("stores").select("*").order("created_at", { ascending: false });
 
       if (error || !stores || !stores.length) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center ui-subtext">No stores registered yet.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center ui-subtext">No stores registered yet.</td></tr>`;
         return;
       }
 
+      window.adminStoresCache = stores;
+
       tbody.innerHTML = stores.map(st => {
         const d = new Date(st.expires_at || Date.now());
-        const dateStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        const dateStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) + " " + d.toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit', hour12:true });
         const isSuspended = st.status === "SUSPENDED";
         const loginStr = st.last_login_at 
-          ? new Date(st.last_login_at).toLocaleDateString("en-IN") + " at " + new Date(st.last_login_at).toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit', hour12:true }).toLowerCase() 
-          : "Never Logged In";
+          ? new Date(st.last_login_at).toLocaleDateString("en-IN") + " " + new Date(st.last_login_at).toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit', hour12:true }).toLowerCase() 
+          : "Never";
 
         return `
           <tr class="hover:bg-blue-600/5 transition">
             <td class="px-4 py-3">
               <span class="font-bold block text-sm" style="color: var(--text-main)">${st.store_name}</span>
               <span class="text-[10px] ui-subtext font-mono block">${st.owner_email} • ${st.owner_phone || 'No phone'}</span>
-              <span class="text-[10px] text-amber-400 font-mono font-semibold block mt-0.5">🕒 Last Login: ${loginStr}</span>
+              <span class="text-[10px] text-blue-400 font-mono block">Pass: <strong>${st.password || 'Not Set'}</strong></span>
+              <span class="text-[10px] text-amber-400 font-mono font-semibold block mt-0.5">🕒 Last: ${loginStr}</span>
+            </td>
+            <td class="px-3 py-3">
+              ${st.reset_otp ? `<span class="px-2 py-1 bg-amber-500/20 text-amber-400 border border-amber-500/40 rounded-lg font-mono font-bold text-xs">${st.reset_otp}</span>` : `<span class="ui-subtext text-[10px]">None</span>`}
             </td>
             <td class="px-3 py-3">
               <input type="text" value="${st.plan_type || '₹299/mo'}" id="admin-fee-${st.id}" 
-                class="form-input text-xs w-24 font-bold font-mono py-1">
+                class="form-input text-xs w-20 font-bold font-mono py-1">
             </td>
             <td class="px-3 py-3">
               <span class="text-[10px] px-2.5 py-0.5 rounded-full font-bold ${isSuspended ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}">
                 ${st.status}
               </span>
             </td>
-            <td class="px-3 py-3 font-mono font-bold" style="color: var(--text-main)">
+            <td class="px-3 py-3 font-mono font-bold text-[11px]" style="color: var(--text-main)">
               ${dateStr}
             </td>
             <td class="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
+              <button onclick="openCustomExpiryModal('${st.id}')" class="px-2.5 py-1 rounded-lg bg-purple-600/25 text-purple-300 border border-purple-500/40 hover:bg-purple-600 hover:text-white transition text-[11px] font-bold" title="Pick date and time from calendar">
+                📅 Set Date/Time
+              </button>
+              <button onclick="adminDirectResetPassword('${st.id}')" class="px-2.5 py-1 rounded-lg bg-amber-600/20 text-amber-400 border border-amber-500/30 text-[11px] font-bold">
+                ⚡ Pass
+              </button>
               <button onclick="adminToggleStatus('${st.id}', '${st.status}')" class="px-2.5 py-1 rounded-lg ${isSuspended ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-600/20 text-rose-400 border border-rose-500/30'} text-[11px] font-bold">
-                ${isSuspended ? 'Activate' : 'Suspend'}
-              </button>
-              <button onclick="adminExtendDays('${st.id}', 30)" class="px-2.5 py-1 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[11px] font-bold">
-                +30 Days
-              </button>
-              <button onclick="adminUpdateFee('${st.id}')" class="px-2.5 py-1 rounded-lg bg-slate-700 text-white text-[11px] font-bold">
-                Save Price
+                ${isSuspended ? 'Active' : 'Suspend'}
               </button>
             </td>
           </tr>
         `;
       }).join('');
+    };
+
+    window.openCustomExpiryModal = function(storeId) {
+      window.activeExpiryStoreId = storeId;
+      const st = (window.adminStoresCache || []).find(s => String(s.id) === String(storeId));
+      const storeName = st ? st.store_name : "Store";
+      document.getElementById("custom-expiry-store-name").innerText = storeName;
+
+      let d = new Date();
+      if (st && st.expires_at) {
+        const parsed = new Date(st.expires_at);
+        if (!isNaN(parsed.getTime())) {
+          d = parsed;
+        }
+      }
+
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      
+      document.getElementById("custom-expiry-input").value = `${year}-${month}-${day}T${hours}:${minutes}`;
+      document.getElementById("modal-custom-expiry").classList.remove("hidden");
+    };
+
+    window.closeCustomExpiryModal = function() {
+      document.getElementById("modal-custom-expiry").classList.add("hidden");
+    };
+
+    window.commitCustomExpiry = async function() {
+      const val = document.getElementById("custom-expiry-input").value;
+      if (!val) return alert("Kripya valid Date aur Time select karein!");
+
+      const selectedDate = new Date(val);
+      if (isNaN(selectedDate.getTime())) return alert("Kripya valid Date aur Time dalein!");
+
+      const isoDate = selectedDate.toISOString();
+
+      const { error } = await client.from("stores").update({ expires_at: isoDate, status: "ACTIVE" }).eq("id", window.activeExpiryStoreId);
+
+      if (error) {
+        alert("Database Error: " + error.message);
+        return;
+      }
+
+      alert(`✅ Validity update ho gayi!\nNayi Expiry: ${selectedDate.toLocaleString('en-IN')}`);
+      window.closeCustomExpiryModal();
+      loadAdminStores();
+    };
+
+    window.adminDirectResetPassword = async function(storeId) {
+      const st = (window.adminStoresCache || []).find(s => String(s.id) === String(storeId));
+      const storeName = st ? st.store_name : "Store";
+      const newPass = prompt(`'${storeName}' ka naya password enter karein:`, "123456");
+      if (!newPass) return;
+
+      await client.from("stores").update({ password: newPass, reset_otp: null }).eq("id", storeId);
+      alert(`✅ Password updated to: ${newPass}`);
+      loadAdminStores();
     };
 
     window.adminToggleStatus = async function(storeId, currentStatus) {
@@ -1017,27 +1318,7 @@
       loadAdminStores();
     };
 
-    window.adminExtendDays = async function(storeId, days) {
-      const { data: store } = await client.from("stores").select("expires_at").eq("id", storeId).single();
-      let baseDate = new Date();
-      if (store && store.expires_at && new Date(store.expires_at) > baseDate) {
-        baseDate = new Date(store.expires_at);
-      }
-      baseDate.setDate(baseDate.getDate() + days);
-
-      await client.from("stores").update({ expires_at: baseDate.toISOString(), status: "ACTIVE" }).eq("id", storeId);
-      alert(`Store extended by ${days} days!`);
-      loadAdminStores();
-    };
-
-    window.adminUpdateFee = async function(storeId) {
-      const val = document.getElementById(`admin-fee-${storeId}`).value.trim();
-      await client.from("stores").update({ plan_type: val }).eq("id", storeId);
-      alert("Subscription price updated!");
-      loadAdminStores();
-    };
-
-    // 5. CLOUD INVENTORY
+    // 8. CLOUD INVENTORY
     async function loadCloudInventory() {
       const { data } = await client.from("products").select("*").eq("store_id", window.currentStore.id).order("name");
       window.products = data || [];
@@ -1052,8 +1333,8 @@
       let list = window.products;
 
       if (cat !== 'All') list = list.filter(p => p.category === cat);
-      if (stockFilter === 'InStock') list = list.filter(p => p.stock > p.reorder_level);
-      if (stockFilter === 'Reorder') list = list.filter(p => p.stock <= p.reorder_level);
+      if (stockFilter === 'InStock') list = list.filter(p => p.stock > 10);
+      if (stockFilter === 'Reorder') list = list.filter(p => p.stock <= 10);
       if (q) list = list.filter(p => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)));
 
       document.getElementById('inv-count-label').innerText = `${list.length} products`;
@@ -1062,7 +1343,7 @@
       tbody.innerHTML = list.map(p => {
         const marginPct = (((p.price - (p.cost || 0)) / p.price) * 100).toFixed(1);
         const stockVal = ((p.cost || 0) * (p.stock || 0)).toLocaleString('en-IN');
-        const isLow = (p.stock || 0) <= (p.reorder_level || 10);
+        const isLow = (p.stock || 0) <= 10;
 
         return `
           <tr class="hover:bg-blue-600/5 transition">
@@ -1087,49 +1368,104 @@
       }).join('');
     };
 
+    window.openEditModal = function(id) {
+      window.activeEditId = id;
+      const p = window.products.find(x => String(x.id) === String(id));
+      if (!p) {
+        alert("Product record nahi mila!");
+        return;
+      }
+
+      document.getElementById('editor-title').innerText = `Edit ${p.name}`;
+      document.getElementById('prod-sku').value = p.sku || '';
+      document.getElementById('prod-barcode').value = p.barcode || '';
+      document.getElementById('prod-name').value = p.name || '';
+      document.getElementById('prod-category').value = p.category || 'Grocery';
+      document.getElementById('prod-cost').value = p.cost !== undefined ? p.cost : '';
+      document.getElementById('prod-price').value = p.price !== undefined ? p.price : '';
+      document.getElementById('prod-stock').value = p.stock !== undefined ? p.stock : 0;
+      
+      toggleModal('modal-product-editor');
+    };
+
+    // BULLETPROOF COMMIT
     window.commitSaveProduct = async function() {
       const name = document.getElementById('prod-name').value.trim();
       const sku = document.getElementById('prod-sku').value.trim();
       const barcode = document.getElementById('prod-barcode').value.trim();
       const category = document.getElementById('prod-category').value;
-      const tax = parseFloat(document.getElementById('prod-tax').value) || 5;
       const cost = parseFloat(document.getElementById('prod-cost').value) || 0;
       const price = parseFloat(document.getElementById('prod-price').value) || 0;
       const stock = parseInt(document.getElementById('prod-stock').value) || 0;
-      const reorder = parseInt(document.getElementById('prod-reorder').value) || 10;
 
       if (!name || !sku || price <= 0) return alert('Name, SKU aur Retail Price zaroori hain!');
 
       const payload = {
         store_id: window.currentStore.id,
-        sku, barcode, name, category,
-        tax_percent: tax, cost, price, stock, reorder_level: reorder
+        sku: sku,
+        barcode: barcode,
+        name: name,
+        category: category,
+        cost: cost,
+        price: price,
+        stock: stock
       };
 
+      let res;
       if (window.activeEditId) {
-        await client.from("products").update(payload).eq("id", window.activeEditId);
+        res = await client.from("products").update(payload).eq("id", window.activeEditId);
       } else {
-        await client.from("products").insert([payload]);
+        res = await client.from("products").insert([payload]);
       }
 
+      if (res && res.error) {
+        alert("Save fail hua: " + res.error.message);
+        return;
+      }
+
+      alert("✅ Product kamyabi se save ho gaya!");
       toggleModal('modal-product-editor');
       await loadCloudInventory();
     };
 
+    window.openAdjustModal = function(id) {
+      window.activeAdjustId = id;
+      const p = window.products.find(x => String(x.id) === String(id));
+      if (!p) return;
+      document.getElementById('adjust-title').innerText = `Adjust stock — ${p.name}`;
+      document.getElementById('adjust-subtitle').innerText = `Current: ${p.stock || 0} · stamped with date & time`;
+      document.getElementById('adjust-delta').value = '';
+      document.getElementById('adjust-note').value = '';
+      document.getElementById('adjust-preview-badge').innerText = `${p.stock || 0} units after adjustment`;
+      toggleModal('modal-adjust-stock');
+    };
+
+    window.previewAdjustMath = function() {
+      const p = window.products.find(x => String(x.id) === String(window.activeAdjustId));
+      if (!p) return;
+      const delta = parseInt(document.getElementById('adjust-delta').value) || 0;
+      const result = Math.max(0, (p.stock || 0) + delta);
+      document.getElementById('adjust-preview-badge').innerText = `${result} units after adjustment`;
+    };
+
     window.commitStockAdjustment = async function() {
-      const p = window.products.find(x => x.id === window.activeAdjustId);
+      const p = window.products.find(x => String(x.id) === String(window.activeAdjustId));
       if (!p) return;
       const delta = parseInt(document.getElementById('adjust-delta').value);
       if (isNaN(delta) || delta === 0) return alert('Enter valid quantity (+/-)');
 
       const newStock = Math.max(0, (p.stock || 0) + delta);
-      await client.from("products").update({ stock: newStock }).eq("id", p.id);
+      const { error } = await client.from("products").update({ stock: newStock }).eq("id", p.id);
+      if (error) {
+        alert("Stock update error: " + error.message);
+        return;
+      }
 
       toggleModal('modal-adjust-stock');
       await loadCloudInventory();
     };
 
-    // 6. CLOUD SALES
+    // 9. CLOUD SALES
     async function loadCloudSales() {
       const { data } = await client.from("sales").select("*").eq("store_id", window.currentStore.id).order("created_at", { ascending: false });
       window.sales = data || [];
@@ -1158,7 +1494,7 @@
         const selected = select.options[select.selectedIndex];
 
         if (selected && selected.value) {
-          const p = window.products.find(x => x.id === selected.value);
+          const p = window.products.find(x => String(x.id) === String(selected.value));
           const qty = parseInt(qtyInput.value) || 1;
           if (p) {
             billItems.push({
@@ -1226,7 +1562,7 @@
       await loadCloudSales();
     };
 
-    // 7. COUNTER SEARCH & ROWS
+    // 10. COUNTER SEARCH & ROWS
     window.handleSearchSuggestions = function(query) {
       const dropdown = document.getElementById('search-suggestions-dropdown');
       const q = query.trim().toLowerCase();
@@ -1246,7 +1582,7 @@
         dropdown.innerHTML = '<p class="text-xs ui-subtext p-3 text-center">No stocks found.</p>';
       } else {
         dropdown.innerHTML = matches.map(p => {
-          const isLow = (p.stock || 0) <= (p.reorder_level || 10);
+          const isLow = (p.stock || 0) <= 10;
           return `
             <div onclick="pickProductFromSearch('${p.id}')" class="p-2.5 flex items-center justify-between hover:bg-blue-600/10 cursor-pointer transition">
               <div>
@@ -1282,9 +1618,7 @@
         }
       }
 
-      if (!filled) {
-        window.addItemRow(productId);
-      }
+      if (!filled) window.addItemRow(productId);
       window.calculateBillTotal();
     };
 
@@ -1301,7 +1635,7 @@
         <select class="flex-1 min-w-0 form-input cursor-pointer product-select text-xs truncate font-medium" onchange="calculateBillTotal()">
           <option value="">Choose product</option>
           ${window.products.map(p => `
-            <option value="${p.id}" data-price="${p.price}" data-stock="${p.stock}" ${p.id === preselectedId ? 'selected' : ''}>
+            <option value="${p.id}" data-price="${p.price}" data-stock="${p.stock}" ${String(p.id) === String(preselectedId) ? 'selected' : ''}>
               ${p.name} — ₹${parseFloat(p.price).toFixed(2)} · (${p.stock || 0} left)
             </option>
           `).join('')}
@@ -1316,10 +1650,7 @@
 
     window.removeRow = function(rowId) {
       const rows = document.querySelectorAll('.item-entry-row');
-      if (rows.length <= 1) {
-        alert('Bill must contain at least one row!');
-        return;
-      }
+      if (rows.length <= 1) return alert('Bill must contain at least one row!');
       const el = document.getElementById(rowId);
       if (el) el.remove();
       calculateBillTotal();
@@ -1347,7 +1678,7 @@
       document.getElementById('items-count-badge').innerText = `${count} item(s)`;
     };
 
-    // 8. PRINT RECEIPT
+    // 11. THERMAL PRINT
     window.executeDirectPrint = function(inv) {
       const cfg = window.storeConfig || {};
       const printDiv = document.getElementById('printable-receipt-area');
@@ -1359,9 +1690,9 @@
 
       printDiv.innerHTML = `
         <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px;">
-          <h2 style="font-size: 14px; margin: 0; font-weight: bold; color: #000;">${window.currentStore ? window.currentStore.store_name : (cfg.header || 'MARTFLOW STORE')}</h2>
+          <h2 style="font-size: 14px; margin: 0; font-weight: bold; color: #000;">${cfg.header || (window.currentStore ? window.currentStore.store_name : 'MARTFLOW STORE')}</h2>
           ${cfg.address ? `<p style="margin: 2px 0; font-size: 10px; color: #000;">${cfg.address}</p>` : ''}
-          ${window.currentStore && window.currentStore.owner_phone ? `<p style="margin: 2px 0; font-size: 10px; color: #000;">Phone: ${window.currentStore.owner_phone}</p>` : ''}
+          ${cfg.phone || (window.currentStore && window.currentStore.owner_phone) ? `<p style="margin: 2px 0; font-size: 10px; color: #000;">Phone: ${cfg.phone || window.currentStore.owner_phone}</p>` : ''}
           ${cfg.gstin ? `<p style="margin: 2px 0; font-size: 10px; font-weight: bold; color: #000;">GSTIN: ${cfg.gstin}</p>` : ''}
           <p style="margin: 2px 0; font-size: 10px; color: #000;">Date: ${inv.dateTime}</p>
           <p style="margin: 2px 0; font-weight: bold; color: #000;">${inv.invoiceNo}</p>
@@ -1405,20 +1736,18 @@
           <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
             <span>Payment Mode:</span><span>${inv.mode}</span>
           </div>
-          ${cfg.upi ? `<div style="font-size: 9px; text-align: center; margin-top: 2px;">UPI: ${cfg.upi}</div>` : ''}
         </div>
 
         <div style="text-align: center; margin-top: 8px; font-size: 9px; color: #000; border-top: 1px dashed #000; padding-top: 4px;">
-          ${cfg.footer ? `<p style="margin: 2px 0;">${cfg.footer}</p>` : ''}
-          ${cfg.policy ? `<p style="margin: 2px 0;">${cfg.policy}</p>` : ''}
-          <p style="margin: 4px 0 0 0; font-weight: bold;">*** THANK YOU - VISIT AGAIN ***</p>
+          <p style="margin: 2px 0 0 0;">${cfg.footer || 'Thank you for shopping with us!'}</p>
+          ${cfg.policy ? `<p style="margin: 2px 0 0 0; font-size: 8px;">${cfg.policy}</p>` : ''}
         </div>
       `;
 
       setTimeout(() => { window.print(); }, 50);
     };
 
-    // 9. SALES LEDGER & DETAILS
+    // 12. SALES LEDGER & DETAILS
     window.renderSales = function() {
       document.getElementById('stat-total-bills').innerText = window.sales.length;
       const total = window.sales.reduce((a, s) => a + parseFloat(s.total || 0), 0);
@@ -1474,7 +1803,6 @@
     window.viewInvoiceDetails = function(index) {
       const inv = window.sales[index];
       if (!inv) return;
-
       window.activeDetailInvoice = inv;
       const d = new Date(inv.created_at || Date.now()).toLocaleString('en-IN');
 
@@ -1487,7 +1815,7 @@
 
       const itemsContainer = document.getElementById('detail-items-list');
       if (!inv.items || inv.items.length === 0) {
-        itemsContainer.innerHTML = '<p class="text-xs ui-subtext p-3 text-center">No item records found for this invoice.</p>';
+        itemsContainer.innerHTML = '<p class="text-xs ui-subtext p-3 text-center">No item records found.</p>';
       } else {
         itemsContainer.innerHTML = inv.items.map(item => `
           <div class="p-2.5 flex items-center justify-between text-xs">
@@ -1523,27 +1851,7 @@
       }
     };
 
-    // 10. HELPERS
-    window.openAdjustModal = function(id) {
-      window.activeAdjustId = id;
-      const p = window.products.find(x => x.id === id);
-      if (!p) return;
-      document.getElementById('adjust-title').innerText = `Adjust stock — ${p.name}`;
-      document.getElementById('adjust-subtitle').innerText = `Current: ${p.stock || 0} · stamped with date & time`;
-      document.getElementById('adjust-delta').value = '';
-      document.getElementById('adjust-note').value = '';
-      document.getElementById('adjust-preview-badge').innerText = `${p.stock || 0} units after adjustment`;
-      toggleModal('modal-adjust-stock');
-    };
-
-    window.previewAdjustMath = function() {
-      const p = window.products.find(x => x.id === window.activeAdjustId);
-      if (!p) return;
-      const delta = parseInt(document.getElementById('adjust-delta').value) || 0;
-      const result = Math.max(0, (p.stock || 0) + delta);
-      document.getElementById('adjust-preview-badge').innerText = `${result} units after adjustment`;
-    };
-
+    // 13. MODALS & HELPERS
     window.openAddProductModal = function() {
       window.activeEditId = null;
       document.getElementById('editor-title').innerText = 'Add New Product';
@@ -1551,28 +1859,9 @@
       document.getElementById('prod-barcode').value = '';
       document.getElementById('prod-name').value = '';
       document.getElementById('prod-category').value = 'Grocery';
-      document.getElementById('prod-tax').value = '5';
       document.getElementById('prod-cost').value = '';
       document.getElementById('prod-price').value = '';
       document.getElementById('prod-stock').value = '';
-      document.getElementById('prod-reorder').value = '10';
-      toggleModal('modal-product-editor');
-    };
-
-    window.openEditModal = function(id) {
-      window.activeEditId = id;
-      const p = window.products.find(x => x.id === id);
-      if (!p) return;
-      document.getElementById('editor-title').innerText = `Edit ${p.name}`;
-      document.getElementById('prod-sku').value = p.sku || '';
-      document.getElementById('prod-barcode').value = p.barcode || '';
-      document.getElementById('prod-name').value = p.name;
-      document.getElementById('prod-category').value = p.category || 'Grocery';
-      document.getElementById('prod-tax').value = p.tax_percent || 5;
-      document.getElementById('prod-cost').value = p.cost || '';
-      document.getElementById('prod-price').value = p.price || '';
-      document.getElementById('prod-stock').value = p.stock || 0;
-      document.getElementById('prod-reorder').value = p.reorder_level || 10;
       toggleModal('modal-product-editor');
     };
 
@@ -1605,22 +1894,59 @@
       if (view === 'sales') renderSales();
     };
 
+    // SAVE STORE SETTINGS
     window.saveStoreSettings = function() {
       window.storeConfig = {
-        name: document.getElementById('setting-store-name').value.trim() || 'MartFlow Store',
+        name: document.getElementById('setting-store-name').value.trim() || 'Martflow',
         address: document.getElementById('setting-store-address').value.trim(),
         phone: document.getElementById('setting-store-phone').value.trim(),
         gstin: document.getElementById('setting-store-gst').value.trim(),
-        currency: document.getElementById('setting-store-currency').value,
-        upi: document.getElementById('setting-store-upi').value.trim(),
-        header: document.getElementById('setting-receipt-header').value.trim() || 'MartFlow Store',
-        footer: document.getElementById('setting-receipt-footer').value.trim(),
-        policy: document.getElementById('setting-receipt-policy').value.trim(),
+        currency: document.getElementById('setting-currency').value || '₹',
+        upi: document.getElementById('setting-store-upi').value.trim() || 'novamart@upi',
+        header: document.getElementById('setting-receipt-header').value.trim() || 'Mustak Store',
+        footer: document.getElementById('setting-receipt-footer').value.trim() || 'Thank you for shopping with us!',
+        policy: document.getElementById('setting-receipt-policy').value.trim() || 'Returns accepted within 7 days with the original bill.',
         splitTax: document.getElementById('setting-tax-split').checked
       };
-
       localStorage.setItem('mf_store_config', JSON.stringify(window.storeConfig));
       alert('Store settings saved successfully!');
+    };
+
+    // DUKANDAR PASSWORD CHANGE FUNCTION
+    window.changeStorePassword = async function() {
+      const currentPass = document.getElementById("change-current-pass").value;
+      const newPass = document.getElementById("change-new-pass").value;
+      const confirmPass = document.getElementById("change-confirm-pass").value;
+
+      if (!window.currentStore) return alert("Pehle login karein!");
+
+      // Verify Purana Password
+      if (window.currentStore.password && window.currentStore.password !== currentPass) {
+        return alert("Purana (Current) Password galat hai!");
+      }
+
+      if (!newPass || newPass.length < 4) {
+        return alert("Naya password kam se kam 4 aksharon ka hona chahiye!");
+      }
+
+      if (newPass !== confirmPass) {
+        return alert("Naya Password aur Confirm Password match nahi ho rahe!");
+      }
+
+      const { error } = await client.from("stores").update({ password: newPass }).eq("id", window.currentStore.id);
+
+      if (error) {
+        return alert("Password update fail hua: " + error.message);
+      }
+
+      window.currentStore.password = newPass;
+      localStorage.setItem("martflow_active_store", JSON.stringify(window.currentStore));
+
+      document.getElementById("change-current-pass").value = "";
+      document.getElementById("change-new-pass").value = "";
+      document.getElementById("change-confirm-pass").value = "";
+
+      alert("🎉 Password kamyabi se update ho gaya!");
     };
 
     window.exportCSV = function() {
@@ -1636,7 +1962,7 @@
       a.click();
     };
 
-    // 11. INITIALIZER
+    // 14. INITIALIZER
     window.onload = function() {
       const clockEl = document.getElementById('current-clock');
       setInterval(() => {
@@ -1659,7 +1985,7 @@
         bootStoreSession();
       } else {
         document.getElementById("auth-modal").classList.remove("hidden");
-        window.setAuthTab("SHOP_REG");
+        window.setAuthTab("SHOP_LOGIN");
         window.clearAuthInputs();
       }
     };
