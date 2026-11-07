@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MartFlow - Retail OS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body.theme-light {
+      --bg-base: #f1f5f9;
+      --card-bg: #ffffff;
+      --card-sub: #f8fafc;
+      --border-color: #cbd5e1;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --input-bg: #ffffff;
+      --badge-retail-bg: #dbeafe;
+      --badge-retail-txt: #1e40af;
+      --badge-retail-border: #bfdbfe;
+      --badge-reg-bg: #dcfce7;
+      --badge-reg-txt: #166534;
+      --badge-reg-border: #bbf7d0;
+      --badge-green-bg: #dcfce7;
+      --badge-green-txt: #15803d;
+      --badge-amber-bg: #fef3c7;
+      --badge-amber-txt: #b45309;
+      --nav-inactive-txt: #334155;
+    }
+
+    body.theme-dark {
+      --bg-base: #060b18;
+      --card-bg: #0c1427;
+      --card-sub: #111c38;
+      --border-color: #1a2949;
+      --text-main: #f8fafc;
+      --text-muted: #8899b5;
+      --input-bg: #080e1e;
+      --badge-retail-bg: rgba(30, 58, 138, 0.6);
+      --badge-retail-txt: #93c5fd;
+      --badge-retail-border: #1e40af;
+      --badge-reg-bg: rgba(6, 78, 59, 0.7);
+      --badge-reg-txt: #34d399;
+      --badge-reg-border: #065f46;
+      --badge-green-bg: rgba(6, 78, 59, 0.7);
+      --badge-green-txt: #34d399;
+      --badge-amber-bg: rgba(120, 53, 15, 0.7);
+      --badge-amber-txt: #fbbf24;
+      --nav-inactive-txt: #8899b5;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .custom-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+    }
+    .form-input {
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 0.75rem;
+      padding: 0.65rem 0.85rem;
+      font-size: 0.825rem;
+    }
+    .form-input:focus {
+      border-color: #2563eb;
+      outline: none;
+    }
+    .ui-label { color: var(--text-muted); font-weight: 600; font-size: 0.75rem; }
+    .ui-subtext { color: var(--text-muted); font-size: 0.725rem; }
+
+    .nav-tab-active {
+      background-color: #2563eb !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3) !important;
+    }
+    .nav-tab-inactive {
+      background-color: transparent !important;
+      color: var(--nav-inactive-txt) !important;
+      font-weight: 600 !important;
+    }
+    .nav-tab-inactive:hover { color: var(--text-main) !important; }
+
+    .auth-box-card {
+      background-color: #1a2234;
+      border: 1px solid #28354f;
+      border-radius: 1.25rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .auth-input {
+      background-color: #0d1424;
+      border: 1px solid #25334d;
+      color: #ffffff;
+      border-radius: 0.6rem;
+      padding: 0.75rem 0.9rem;
+      font-size: 0.9rem;
+      width: 100%;
+      outline: none;
+    }
+    .auth-input:focus { border-color: #10b981; }
+    .auth-green-btn {
+      background-color: #10b981;
+      color: #022c22;
+      font-weight: 700;
+      border-radius: 0.6rem;
+      padding: 0.8rem;
+      width: 100%;
+      transition: background-color 0.2s;
+    }
+    .auth-green-btn:hover { background-color: #059669; }
+
+    @media print {
+      body { background-color: #ffffff !important; color: #000000 !important; }
+      body * { visibility: hidden !important; }
+      #printable-receipt-area, #printable-receipt-area * { visibility: visible !important; }
+      #printable-receipt-area {
+        position: absolute !important;
+        left: 0 !important; top: 0 !important; width: 78mm !important;
+        margin: 0 !important; padding: 6px !important;
+        background: #ffffff !important; color: #000000 !important;
+        font-family: monospace !important; font-size: 11px !important; line-height: 1.25 !important;
+      }
+    }
+  </style>
+</head>
+<body class="theme-dark min-h-screen flex flex-col pb-16 select-none">
+
+  <!-- AUTH OVERLAY -->
+  <div id="auth-modal" class="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4">
+    <div class="auth-box-card p-6 max-w-sm w-full space-y-4">
+      <div class="text-center space-y-1">
+        <h2 class="text-3xl font-extrabold tracking-tight text-emerald-400">MartFlow</h2>
+        <p class="text-xs text-slate-400 font-medium">Cloud Retail POS & Store Management</p>
+      </div>
+
+      <div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-[#111927] border border-[#26354f]">
+        <button id="btn-tab-shop-login" onclick="setAuthTab('SHOP_LOGIN')" class="py-2 rounded-lg text-xs font-bold transition bg-[#0d1424] text-slate-300">Log In</button>
+        <button id="btn-tab-shop-reg" onclick="setAuthTab('SHOP_REG')" class="py-2 rounded-lg text-xs font-bold transition bg-emerald-500 text-slate-950 shadow">Register Dukan</button>
+        <button id="btn-tab-admin-login" onclick="setAuthTab('ADMIN_LOGIN')" class="py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white">Super Admin</button>
+      </div>
+
+      <div class="space-y-3 pt-1">
+        <div id="auth-reg-extra" class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Store / Dukan Name</label>
+            <input type="text" id="auth-store-name" value="" autocomplete="off" class="auth-input">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Mobile / Phone</label>
+            <input type="tel" id="auth-store-phone" value="" maxlength="10" autocomplete="off" class="auth-input">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1" id="label-auth-email">Owner Email</label>
+          <input type="email" id="auth-email-input" value="" autocomplete="off" class="auth-input">
+          <input type="password" id="auth-admin-email-masked" value="" autocomplete="off" class="auth-input hidden">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-1" id="label-auth-pass">Master Password</label>
+          <input type="password" id="auth-password-input" value="" autocomplete="off" class="auth-input">
+        </div>
+      </div>
+
+      <button id="btn-auth-submit" onclick="handleAuthSubmit()" class="auth-green-btn text-sm mt-2 shadow-lg shadow-emerald-900/30">
+        Register & Open Store (7 Days Free)
+      </button>
+
+      <p id="auth-error-msg" class="text-rose-400 text-xs font-medium text-center min-h-[16px]"></p>
+    </div>
+  </div>
+
+  <!-- LOCKED MODAL -->
+  <div id="modal-sub-locked" class="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-6 max-w-sm w-full text-center space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
+      <div class="text-4xl">🔒</div>
+      <div>
+        <h3 class="text-lg font-bold text-rose-500">7-Day Free Trial Expired</h3>
+        <p class="ui-subtext mt-1">Aapki dukan ka 7 din ka free trial khatam ho gaya hai. Aap automatically logout ho chuke hain.</p>
+      </div>
+      <div class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+        <span class="text-[10px] ui-subtext">Monthly Renewal Cost:</span>
+        <div id="locked-fee-display" class="text-xl font-mono font-bold text-emerald-400">₹299.00</div>
+        <p class="text-[10px] text-slate-400 mt-1">Super Admin se plan renew karwane ke baad hi dukan open hogi.</p>
+      </div>
+      <button onclick="doLogout()" class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition">
+        Return to Login Screen
+      </button>
+    </div>
+  </div>
+
+  <!-- SUPER ADMIN MODAL -->
+  <div id="modal-super-admin" class="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-5 max-w-4xl w-full max-h-[90vh] flex flex-col space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
+      <div class="flex items-center justify-between pb-3 border-b" style="border-color: var(--border-color)">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">👑</span>
+          <div>
+            <h3 class="font-bold text-sm" style="color: var(--text-main)">MartFlow Master Control Panel (Owner)</h3>
+            <p class="ui-subtext">Manage tenant subscriptions, pricing, login times & active/suspend states.</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="loadAdminStores()" class="px-3 py-1.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 text-xs font-bold">↻ Refresh</button>
+          <button onclick="exitAdminPanel()" class="px-3 py-1.5 rounded-xl bg-rose-600/20 text-rose-400 border border-rose-500/30 text-xs font-bold">Close Admin</button>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-card rounded-2xl">
+        <table class="w-full text-left text-xs">
+          <thead class="border-b" style="background-color: var(--card-sub); border-color: var(--border-color); color: var(--text-muted)">
+            <tr>
+              <th class="px-4 py-3 font-bold">Store Details & Last Login</th>
+              <th class="px-3 py-3 font-bold">Monthly Price</th>
+              <th class="px-3 py-3 font-bold">Status</th>
+              <th class="px-3 py-3 font-bold">Trial / Due Date</th>
+              <th class="px-4 py-3 text-right font-bold">Action</th>
+            </tr>
+          </thead>
+          <tbody id="admin-stores-table-body" class="divide-y" style="border-color: var(--border-color)"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HEADER -->
+  <header class="custom-card sticky top-0 z-30 px-4 py-2.5 flex items-center justify-between border-b shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="h-8 w-8 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-md shadow-blue-500/30">
+        ⚡
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-sm tracking-tight flex items-center gap-1.5" style="color: var(--text-main)">
+            <span id="header-store-display">MartFlow</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border" 
+                  style="background-color: var(--badge-retail-bg); color: var(--badge-retail-txt); border-color: var(--badge-retail-border)">
+              Retail OS
+            </span>
+          </h1>
+          <span class="text-[10px] font-bold flex items-center gap-1 px-2.5 py-0.5 rounded-full border"
+                style="background-color: var(--badge-reg-bg); color: var(--badge-reg-txt); border-color: var(--badge-reg-border)">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> <span id="header-plan-display">7d Trial</span>
+          </span>
+        </div>
+        <p class="ui-subtext" id="current-clock">Loading...</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <button onclick="promptSuperAdminAccess()" title="Owner Super Admin" class="p-2 rounded-xl custom-card text-xs hover:border-amber-500 transition text-amber-400">👑</button>
+      <button onclick="toggleTheme()" class="p-2 rounded-xl custom-card text-xs hover:border-blue-500 transition"><span id="theme-btn-icon">☀️</span></button>
+      <button onclick="doLogout()" title="Manual Log Out" class="h-7 px-2.5 rounded-lg bg-rose-600/20 hover:bg-rose-600 border border-rose-500/30 text-rose-400 hover:text-white flex items-center justify-center text-xs font-bold transition">Log Out</button>
+    </div>
+  </header>
+
+  <!-- NAVIGATION -->
+  <div class="px-4 py-2 flex items-center justify-between border-b" style="border-color: var(--border-color); background-color: var(--card-sub)">
+    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+      <button onclick="switchView('billing')" id="tab-btn-billing" class="px-3.5 py-1.5 rounded-xl text-xs nav-tab-active whitespace-nowrap transition">Counter POS</button>
+      <button onclick="switchView('inventory')" id="tab-btn-inventory" class="px-3.5 py-1.5 rounded-xl text-xs nav-tab-inactive whitespace-nowrap transition">Inventory</button>
+      <button onclick="switchView('sales')" id="tab-btn-sales" class="px-3.5 py-1.5 rounded-xl text-xs nav-tab-inactive whitespace-nowrap transition">Sales Ledger</button>
+      <button onclick="switchView('settings')" id="tab-btn-settings" class="px-3.5 py-1.5 rounded-xl text-xs nav-tab-inactive whitespace-nowrap transition">Store Settings</button>
+    </div>
+    <span class="text-[10px] font-mono hidden md:inline" style="color: var(--text-muted)">T1 · Cloud Synced</span>
+  </div>
+
+  <!-- MAIN VIEW -->
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 space-y-4">
+    <!-- 1. COUNTER POS VIEW -->
+    <div id="view-billing" class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-7 space-y-3">
+        <div class="custom-card rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+          <div class="flex items-center justify-between text-xs pb-1.5 border-b" style="border-color: var(--border-color)">
+            <span class="ui-label uppercase tracking-wider text-[10px]">Customer Details</span>
+            <span class="text-rose-500 font-bold text-[10px]">* Name Mandatory</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block ui-label mb-1">Customer Name <span class="text-rose-500">*</span></label>
+              <input type="text" id="cust-name" placeholder="Enter customer name..." class="w-full form-input">
+            </div>
+            <div>
+              <label class="block ui-label mb-1">Mobile Number (Optional)</label>
+              <input type="tel" id="cust-phone" maxlength="10" placeholder="e.g. 9876543210" class="w-full form-input">
+            </div>
+          </div>
+        </div>
+
+        <div class="relative">
+          <label class="block ui-label mb-1">Search Products by Name or SKU</label>
+          <div class="relative">
+            <input type="text" id="product-search-input" placeholder="Type e.g. Atta, Milk, Butter..." 
+              class="w-full form-input pl-8 text-xs font-medium" autocomplete="off" oninput="handleSearchSuggestions(this.value)">
+            <span class="absolute left-2.5 top-2.5 text-xs" style="color: var(--text-muted)">🔍</span>
+          </div>
+          <div id="search-suggestions-dropdown" class="absolute left-0 right-0 mt-1 custom-card rounded-2xl shadow-2xl z-40 max-h-60 overflow-y-auto divide-y hidden" style="border-color: var(--border-color)"></div>
+        </div>
+
+        <div class="custom-card rounded-2xl p-3.5 space-y-2.5 shadow-sm">
+          <div class="flex items-center justify-between pb-1.5 border-b" style="border-color: var(--border-color)">
+            <span class="font-bold text-xs" style="color: var(--text-main)">Active Bill Items</span>
+            <span class="ui-subtext" id="items-count-badge">0 item(s)</span>
+          </div>
+          <div id="items-rows-container" class="space-y-2"></div>
+          <div class="pt-1">
+            <button onclick="addItemRow()" class="px-3 py-1.5 rounded-xl bg-blue-600/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 text-xs font-bold hover:bg-blue-600 hover:text-white transition">
+              + Add blank row
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-5 custom-card rounded-2xl p-4 flex flex-col justify-between space-y-3 shadow-sm">
+        <div class="space-y-3">
+          <h3 class="ui-label uppercase tracking-wider pb-2 border-b" style="border-color: var(--border-color)">Payment & Summary</h3>
+          <div>
+            <label class="block ui-label mb-1">Payment mode</label>
+            <select id="payment-mode" class="w-full form-input cursor-pointer font-medium">
+              <option value="Cash">Cash — full now</option>
+              <option value="UPI">UPI / QR Code</option>
+              <option value="Card">Card / POS</option>
+            </select>
+          </div>
+          <div class="custom-card rounded-2xl p-3.5 flex items-center justify-between border-dashed">
+            <span class="ui-label">Total Bill</span>
+            <span class="text-xl font-mono font-bold text-emerald-600 dark:text-emerald-400">
+              ₹<span id="grand-total-display">0.00</span>
+            </span>
+          </div>
+          <div>
+            <label class="block ui-label mb-1">Bill note (optional)</label>
+            <input type="text" id="bill-note" placeholder="Remark on invoice..." class="w-full form-input">
+          </div>
+        </div>
+        <button onclick="processBill()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-blue-600/30 transition text-sm">
+          Complete & Print Receipt
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. INVENTORY VIEW -->
+    <div id="view-inventory" class="hidden space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-bold" style="color: var(--text-main)">Inventory</h2>
+          <p class="ui-subtext">Master stock with live margin, stock value and reason-stamped adjustments.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="exportCSV()" class="px-3 py-1.5 rounded-xl custom-card text-xs font-bold transition hover:border-blue-500" style="color: var(--text-main)">↓ Export CSV</button>
+          <button onclick="openAddProductModal()" class="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-600/20">+ Add product</button>
+        </div>
+      </div>
+
+      <div class="custom-card rounded-2xl p-3 space-y-2.5 shadow-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <input type="text" id="inv-search" placeholder="Search name, SKU or barcode..." class="form-input text-xs" oninput="renderInventory()">
+          <select id="inv-filter-cat" class="form-input text-xs cursor-pointer font-medium" onchange="renderInventory()">
+            <option value="All">All categories</option>
+            <option value="Grocery">Grocery</option>
+            <option value="Dairy">Dairy</option>
+            <option value="Beverages">Beverages</option>
+            <option value="Snacks">Snacks</option>
+            <option value="Household">Household</option>
+          </select>
+          <select id="inv-filter-stock" class="form-input text-xs cursor-pointer font-medium" onchange="renderInventory()">
+            <option value="All">All stock</option>
+            <option value="InStock">In Stock Only</option>
+            <option value="Reorder">Reorder Alerts Only</option>
+          </select>
+        </div>
+        <div class="text-right text-[11px] font-mono font-semibold" style="color: var(--text-muted)" id="inv-count-label">0 products</div>
+      </div>
+
+      <div class="custom-card rounded-2xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="border-b" style="background-color: var(--card-sub); border-color: var(--border-color); color: var(--text-muted)">
+              <tr>
+                <th class="px-4 py-3 font-bold">Product / SKU</th>
+                <th class="px-3 py-3 font-bold">Retail</th>
+                <th class="px-3 py-3 font-bold">Margin</th>
+                <th class="px-3 py-3 font-bold">Stock</th>
+                <th class="px-3 py-3 font-bold">Stock Value</th>
+                <th class="px-4 py-3 text-right font-bold">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventory-table-body" class="divide-y" style="border-color: var(--border-color)"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. SALES LEDGER VIEW -->
+    <div id="view-sales" class="hidden space-y-3">
+      <div class="grid grid-cols-2 gap-2 text-center">
+        <div class="custom-card p-3 rounded-2xl shadow-sm">
+          <p class="ui-label">Total Invoices</p>
+          <h4 id="stat-total-bills" class="text-base font-bold mt-0.5" style="color: var(--text-main)">0</h4>
+        </div>
+        <div class="custom-card p-3 rounded-2xl shadow-sm">
+          <p class="ui-label">Total Revenue</p>
+          <h4 id="stat-total-amount" class="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">₹0.00</h4>
+        </div>
+      </div>
+
+      <div class="custom-card rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3 pb-2 border-b" style="border-color: var(--border-color)">
+          <h3 class="ui-label uppercase tracking-wider">Transaction History & Invoices</h3>
+          <span class="ui-subtext">Tap "View Bill" to inspect purchased items</span>
+        </div>
+        <div class="divide-y text-xs" style="border-color: var(--border-color)" id="sales-ledger-list"></div>
+      </div>
+    </div>
+
+    <!-- 4. STORE SETTINGS VIEW -->
+    <div id="view-settings" class="hidden space-y-4 max-w-2xl mx-auto">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold" style="color: var(--text-main)">Store Settings</h2>
+          <p class="ui-subtext">Branding, currency, UPI and receipt customization for this tenant.</p>
+        </div>
+        <button onclick="saveStoreSettings()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30">
+          💾 Save settings
+        </button>
+      </div>
+
+      <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
+        <div class="pb-2 border-b" style="border-color: var(--border-color)">
+          <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🏬 Store branding</h3>
+        </div>
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block ui-label mb-1">Store name *</label>
+            <input type="text" id="setting-store-name" placeholder="Nova Mart Supermarket" class="w-full form-input font-medium">
+          </div>
+          <div>
+            <label class="block ui-label mb-1">Address</label>
+            <textarea id="setting-store-address" rows="3" placeholder="Shop Address..." class="w-full form-input resize-none font-medium"></textarea>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block ui-label mb-1">Phone</label>
+              <input type="text" id="setting-store-phone" placeholder="+91 98220 11223" class="w-full form-input font-medium">
+            </div>
+            <div>
+              <label class="block ui-label mb-1">GSTIN / Tax ID (Optional)</label>
+              <input type="text" id="setting-store-gst" placeholder="27AABCU9603R1Z" class="w-full form-input font-medium">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block ui-label mb-1">Currency symbol</label>
+              <select id="setting-store-currency" class="w-full form-input cursor-pointer font-medium">
+                <option value="₹">₹ (INR)</option>
+                <option value="$">$ (USD)</option>
+                <option value="Rp">Rp (IDR)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block ui-label mb-1">UPI VPA (for QR / Instant Pay)</label>
+              <input type="text" id="setting-store-upi" placeholder="novamart@upi" class="w-full form-input font-medium">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
+        <div class="pb-2 border-b" style="border-color: var(--border-color)">
+          <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🧾 Receipt customizer</h3>
+        </div>
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block ui-label mb-1">Header text</label>
+            <input type="text" id="setting-receipt-header" placeholder="Nova Mart Supermarket" class="w-full form-input font-medium">
+          </div>
+          <div>
+            <label class="block ui-label mb-1">Footer / terms</label>
+            <textarea id="setting-receipt-footer" rows="2" placeholder="Thank you for shopping with us!" class="w-full form-input resize-none font-medium"></textarea>
+          </div>
+          <div>
+            <label class="block ui-label mb-1">Return policy</label>
+            <textarea id="setting-receipt-policy" rows="2" placeholder="Returns accepted within 7 days with the original bill." class="w-full form-input resize-none font-medium"></textarea>
+          </div>
+          <div class="flex items-center gap-2.5 pt-1">
+            <input type="checkbox" id="setting-tax-split" checked class="w-4 h-4 rounded text-blue-600 cursor-pointer">
+            <label for="setting-tax-split" class="ui-label cursor-pointer text-xs">Break tax into CGST / SGST on receipts</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="custom-card rounded-3xl p-5 space-y-3.5 shadow-sm">
+        <div class="pb-2 border-b" style="border-color: var(--border-color)">
+          <h3 class="text-sm font-bold flex items-center gap-2" style="color: var(--text-main)">🔑 License & Trial Status</h3>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <span class="ui-label block mb-1">Plan</span>
+            <span id="setting-lic-plan" class="px-2.5 py-1 rounded-lg bg-blue-100 text-blue-800 dark:bg-slate-800 dark:text-stone-200 font-bold tracking-wider inline-block">7-DAY TRIAL</span>
+          </div>
+          <div>
+            <span class="ui-label block mb-1">License key</span>
+            <span class="font-mono font-bold" style="color: var(--text-main)">MF-7DAY-TRIAL-PASS</span>
+          </div>
+          <div>
+            <span class="ui-label block mb-1">Expires / Due</span>
+            <span id="setting-lic-expires" class="font-bold text-amber-400">Loading...</span>
+          </div>
+          <div>
+            <span class="ui-label block mb-1">Status</span>
+            <span id="setting-lic-status" class="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800 text-[10px] font-bold">active</span>
+          </div>
+          <div class="col-span-2 pt-1 border-t border-slate-800">
+            <span class="ui-label block mb-0.5">Current Session Login Timestamp:</span>
+            <span id="setting-lic-login" class="font-mono text-[11px] text-blue-400">Loading...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL: VIEW BILL DETAILS -->
+  <div id="modal-invoice-detail" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-5 max-w-md w-full space-y-4 shadow-2xl border" style="border-color: var(--border-color)">
+      <div class="flex items-center justify-between pb-2.5 border-b" style="border-color: var(--border-color)">
+        <div>
+          <h3 class="font-bold text-sm" id="detail-invoice-no" style="color: var(--text-main)">INV-000000</h3>
+          <p class="ui-subtext" id="detail-invoice-date">Date & Time</p>
+        </div>
+        <button onclick="closeInvoiceModal()" class="ui-subtext hover:text-red-500 text-base font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-3 rounded-xl border space-y-1.5 text-xs" style="background-color: var(--card-sub); border-color: var(--border-color)">
+        <div class="flex justify-between">
+          <span class="ui-label">Customer:</span>
+          <span class="font-bold" id="detail-cust-name" style="color: var(--text-main)">-</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="ui-label">Phone:</span>
+          <span class="font-mono font-semibold" id="detail-cust-phone" style="color: var(--text-main)">N/A</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="ui-label">Payment:</span>
+          <span class="font-bold text-blue-600 dark:text-blue-400" id="detail-pay-mode">CASH</span>
+        </div>
+      </div>
+
+      <div class="space-y-1.5">
+        <h4 class="ui-label uppercase tracking-wider">Purchased Items:</h4>
+        <div class="max-h-48 overflow-y-auto divide-y border rounded-xl custom-card" style="border-color: var(--border-color)" id="detail-items-list"></div>
+      </div>
+
+      <div class="pt-2 border-t flex items-center justify-between" style="border-color: var(--border-color)">
+        <div>
+          <span class="ui-label block">Grand Total</span>
+          <span class="text-lg font-mono font-bold text-emerald-600 dark:text-emerald-400" id="detail-total-amount">₹0.00</span>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="closeInvoiceModal()" class="px-3.5 py-2 rounded-xl custom-card text-xs font-bold transition hover:border-blue-500" style="color: var(--text-main)">Close</button>
+          <button onclick="reprintActiveInvoice()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30">
+            🖨️ Re-Print
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADJUST STOCK -->
+  <div id="modal-adjust-stock" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-5 max-w-sm w-full space-y-3.5 shadow-2xl border" style="border-color: var(--border-color)">
+      <div class="flex items-center justify-between pb-2 border-b" style="border-color: var(--border-color)">
+        <div>
+          <h3 class="font-bold text-sm" id="adjust-title" style="color: var(--text-main)">Adjust stock</h3>
+          <p class="ui-subtext" id="adjust-subtitle">Stamped with date & time</p>
+        </div>
+        <button onclick="toggleModal('modal-adjust-stock')" class="ui-subtext hover:text-red-500 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="ui-label">Quantity change (+/-) *</label>
+            <input type="number" id="adjust-delta" placeholder="e.g. 24 or -3" class="w-full form-input mt-1 font-bold" oninput="previewAdjustMath()">
+          </div>
+          <div>
+            <label class="ui-label">Reason *</label>
+            <select id="adjust-reason" class="w-full form-input mt-1 font-medium">
+              <option value="Restock / Purchase">Restock / Purchase</option>
+              <option value="Damaged / Expired">Damaged / Expired</option>
+              <option value="Customer Return">Customer Return</option>
+              <option value="Discrepancy">Discrepancy</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="ui-label">Note</label>
+          <input type="text" id="adjust-note" placeholder="Optional context" class="w-full form-input mt-1">
+        </div>
+        <div class="custom-card rounded-xl p-2.5 text-center font-mono font-bold" style="color: var(--text-main)" id="adjust-preview-badge">
+          0 units after adjustment
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="toggleModal('modal-adjust-stock')" class="flex-1 py-2 rounded-xl custom-card text-xs font-bold" style="color: var(--text-main)">Cancel</button>
+        <button onclick="commitStockAdjustment()" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30">Post adjustment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: EDIT / ADD PRODUCT -->
+  <div id="modal-product-editor" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="custom-card rounded-3xl p-5 max-w-md w-full space-y-3 shadow-2xl border" style="border-color: var(--border-color)">
+      <div class="flex items-center justify-between pb-2 border-b" style="border-color: var(--border-color)">
+        <div>
+          <h3 class="font-bold text-sm" id="editor-title" style="color: var(--text-main)">Edit Product</h3>
+        </div>
+        <button onclick="toggleModal('modal-product-editor')" class="ui-subtext hover:text-red-500 font-bold">✕</button>
+      </div>
+
+      <div class="space-y-2.5 text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="ui-label">SKU *</label>
+            <input type="text" id="prod-sku" placeholder="1058000012" class="w-full form-input mt-1 font-mono">
+          </div>
+          <div>
+            <label class="ui-label">Barcode</label>
+            <input type="text" id="prod-barcode" placeholder="8901058000012" class="w-full form-input mt-1 font-mono">
+          </div>
+        </div>
+
+        <div>
+          <label class="ui-label">Product name *</label>
+          <input type="text" id="prod-name" placeholder="Aashirvaad Atta 5kg" class="w-full form-input mt-1 font-bold">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="ui-label">Category</label>
+            <select id="prod-category" class="w-full form-input mt-1 font-medium">
+              <option value="Grocery">Grocery</option>
+              <option value="Dairy">Dairy</option>
+              <option value="Beverages">Beverages</option>
+              <option value="Snacks">Snacks</option>
+              <option value="Household">Household</option>
+            </select>
+          </div>
+          <div>
+            <label class="ui-label">Tax %</label>
+            <input type="number" id="prod-tax" value="5" class="w-full form-input mt-1 font-bold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="ui-label">Cost price</label>
+            <input type="number" id="prod-cost" placeholder="240" class="w-full form-input mt-1 font-bold">
+          </div>
+          <div>
+            <label class="ui-label">Retail price *</label>
+            <input type="number" id="prod-price" placeholder="295" class="w-full form-input mt-1 font-bold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="ui-label">Current stock *</label>
+            <input type="number" id="prod-stock" placeholder="63" class="w-full form-input mt-1 font-bold">
+          </div>
+          <div>
+            <label class="ui-label">Reorder level</label>
+            <input type="number" id="prod-reorder" placeholder="15" class="w-full form-input mt-1 font-bold">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="toggleModal('modal-product-editor')" class="flex-1 py-2 rounded-xl custom-card text-xs font-bold" style="color: var(--text-main)">Cancel</button>
+        <button onclick="commitSaveProduct()" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-600/30">Save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="printable-receipt-area"></div>
+
+  <!-- SCRIPT -->
+  <script>
+    const SUPABASE_URL = "https://rcofrtcyhjgdsiotkkjq.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_6uFSLPyZ6w-VXAhkXgL5uA_cvFJO73C";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const SUPER_ADMIN_EMAIL = "mtkahamad1@gmail.com";
+    const SUPER_ADMIN_PASS = "@mustak742214";
+
+    window.currentStore = null;
+    window.products = [];
+    window.sales = [];
+    window.currentTheme = localStorage.getItem('mf_pro_theme') || 'dark';
+    window.authTab = "SHOP_REG";
+
+    window.storeConfig = {
+      name: 'MartFlow Store',
+      address: '',
+      phone: '',
+      gstin: '',
+      currency: '₹',
+      upi: '',
+      header: 'MartFlow Store',
+      footer: 'Thank you for shopping with us!',
+      policy: 'Returns accepted within 7 days with the original bill.',
+      splitTax: true
+    };
+
+    window.rowCounter = 0;
+    window.activeAdjustId = null;
+    window.activeEditId = null;
+    window.activeDetailInvoice = null;
+
+    window.clearAuthInputs = function() {
+      document.getElementById("auth-store-name").value = "";
+      document.getElementById("auth-store-phone").value = "";
+      document.getElementById("auth-email-input").value = "";
+      document.getElementById("auth-admin-email-masked").value = "";
+      document.getElementById("auth-password-input").value = "";
+      document.getElementById("auth-error-msg").innerText = "";
+    };
+
+    window.setAuthTab = function(mode) {
+      window.authTab = mode;
+      window.clearAuthInputs();
+
+      const regExtra = document.getElementById("auth-reg-extra");
+      const submitBtn = document.getElementById("btn-auth-submit");
+      const standardEmail = document.getElementById("auth-email-input");
+      const maskedEmail = document.getElementById("auth-admin-email-masked");
+      const emailLabel = document.getElementById("label-auth-email");
+      const passLabel = document.getElementById("label-auth-pass");
+
+      const inactiveClass = "py-2 rounded-lg text-xs font-bold transition text-slate-400 hover:text-white";
+      document.getElementById("btn-tab-shop-login").className = inactiveClass;
+      document.getElementById("btn-tab-shop-reg").className = inactiveClass;
+      document.getElementById("btn-tab-admin-login").className = inactiveClass;
+
+      if (mode === "SHOP_REG") {
+        document.getElementById("btn-tab-shop-reg").className = "py-2 rounded-lg text-xs font-bold transition bg-emerald-500 text-slate-950 shadow";
+        regExtra.classList.remove("hidden");
+        standardEmail.classList.remove("hidden");
+        maskedEmail.classList.add("hidden");
+        emailLabel.innerText = "Owner Email";
+        passLabel.innerText = "Master Password";
+        submitBtn.className = "auth-green-btn text-sm mt-2 shadow-lg shadow-emerald-900/30";
+        submitBtn.innerText = "Register & Open Store (7 Days Free)";
+      } else if (mode === "ADMIN_LOGIN") {
+        document.getElementById("btn-tab-admin-login").className = "py-2 rounded-lg text-xs font-bold transition bg-amber-600 text-white shadow";
+        regExtra.classList.add("hidden");
+        standardEmail.classList.add("hidden");
+        maskedEmail.classList.remove("hidden");
+        emailLabel.innerText = "Master Admin Key / Email";
+        passLabel.innerText = "Admin Password";
+        submitBtn.className = "w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition text-sm mt-2 shadow-lg shadow-amber-900/30";
+        submitBtn.innerText = "Enter Super Admin Suite";
+      } else {
+        document.getElementById("btn-tab-shop-login").className = "py-2 rounded-lg text-xs font-bold transition bg-blue-600 text-white shadow";
+        regExtra.classList.add("hidden");
+        standardEmail.classList.remove("hidden");
+        maskedEmail.classList.add("hidden");
+        emailLabel.innerText = "Owner Email";
+        passLabel.innerText = "Master Password";
+        submitBtn.className = "w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl transition text-sm mt-2 shadow-lg shadow-blue-900/30";
+        submitBtn.innerText = "Log In to Store";
+      }
+    };
+
+    window.handleAuthSubmit = async function() {
+      const err = document.getElementById("auth-error-msg");
+      err.innerText = "";
+
+      if (window.authTab === "ADMIN_LOGIN") {
+        const maskedVal = document.getElementById("auth-admin-email-masked").value.trim();
+        const passVal = document.getElementById("auth-password-input").value;
+
+        if (maskedVal === SUPER_ADMIN_EMAIL && passVal === SUPER_ADMIN_PASS) {
+          document.getElementById("auth-modal").classList.add("hidden");
+          openSuperAdminPanel();
+        } else {
+          err.innerText = "Galat Super Admin credentials!";
+        }
+        return;
+      }
+
+      const email = document.getElementById("auth-email-input").value.trim().toLowerCase();
+      const pass = document.getElementById("auth-password-input").value;
+
+      if (!email || !pass) {
+        err.innerText = "Email aur Password dono enter karein.";
+        return;
+      }
+
+      const currentTimestamp = new Date().toISOString();
+
+      if (window.authTab === "SHOP_REG") {
+        const storeName = document.getElementById("auth-store-name").value.trim();
+        const phone = document.getElementById("auth-store-phone").value.trim();
+
+        if (!storeName) {
+          err.innerText = "Store / Dukan ka naam likhna zaroori hai.";
+          return;
+        }
+
+        const exp = new Date();
+        exp.setDate(exp.getDate() + 7);
+
+        const { data, error } = await client.from("stores").insert([{
+          store_name: storeName,
+          owner_email: email,
+          owner_phone: phone,
+          plan_type: "7-Day Trial",
+          status: "ACTIVE",
+          expires_at: exp.toISOString(),
+          last_login_at: currentTimestamp
+        }]).select().single();
+
+        if (error) {
+          err.innerText = "Account banne me dikkat: " + error.message;
+          return;
+        }
+
+        window.currentStore = data;
+        localStorage.setItem("martflow_active_store", JSON.stringify(data));
+        document.getElementById("auth-modal").classList.add("hidden");
+        bootStoreSession();
+      } else {
+        const { data, error } = await client.from("stores").select("*").eq("owner_email", email).maybeSingle();
+
+        if (error || !data) {
+          err.innerText = "Yeh email register nahi hai. Pehle 'Register Dukan' karein.";
+          return;
+        }
+
+        const expiry = new Date(data.expires_at || Date.now());
+        const now = new Date();
+        if (now > expiry || data.status === "EXPIRED" || data.status === "SUSPENDED") {
+          localStorage.removeItem("martflow_active_store");
+          document.getElementById("auth-modal").classList.add("hidden");
+          document.getElementById("modal-sub-locked").classList.remove("hidden");
+          document.getElementById("locked-fee-display").innerText = data.plan_type || "₹299.00";
+          return;
+        }
+
+        try {
+          await client.from("stores").update({ last_login_at: currentTimestamp }).eq("id", data.id);
+          data.last_login_at = currentTimestamp;
+        } catch (e) {
+          console.warn(e);
+        }
+
+        window.currentStore = data;
+        localStorage.setItem("martflow_active_store", JSON.stringify(data));
+        document.getElementById("auth-modal").classList.add("hidden");
+        bootStoreSession();
+      }
+    };
+
+    window.doLogout = function() {
+      localStorage.removeItem("martflow_active_store");
+      location.reload();
+    };
+
+    // 3. STORE SESSION & 7-DAY AUTOMATIC EXPIRY LOGOUT GATE (WITH AUTO-CLAMP TO 7 DAYS)
+    window.bootStoreSession = async function() {
+      if (!window.currentStore) return;
+
+      const { data: refreshed } = await client.from("stores").select("*").eq("id", window.currentStore.id).single();
+      if (refreshed) {
+        window.currentStore = refreshed;
+      }
+
+      let expiry = new Date(window.currentStore.expires_at || Date.now());
+      const now = new Date();
+      let diffMs = expiry - now;
+      let daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      // CLAMP PURANA 30 DAYS RECORD TO 7 DAYS
+      if (daysLeft > 7) {
+        const forced7Days = new Date();
+        forced7Days.setDate(forced7Days.getDate() + 7);
+        window.currentStore.expires_at = forced7Days.toISOString();
+        window.currentStore.plan_type = "7-Day Trial";
+
+        await client.from("stores").update({ 
+          expires_at: forced7Days.toISOString(), 
+          plan_type: "7-Day Trial" 
+        }).eq("id", window.currentStore.id);
+
+        expiry = forced7Days;
+        diffMs = expiry - now;
+        daysLeft = 7;
+      }
+
+      localStorage.setItem("martflow_active_store", JSON.stringify(window.currentStore));
+
+      if (diffMs <= 0 || window.currentStore.status === "SUSPENDED" || window.currentStore.status === "EXPIRED") {
+        localStorage.removeItem("martflow_active_store");
+        document.getElementById("modal-sub-locked").classList.remove("hidden");
+        document.getElementById("locked-fee-display").innerText = window.currentStore.plan_type || "₹299.00";
+        document.getElementById("header-plan-display").innerText = "Expired";
+        return;
+      }
+
+      document.getElementById("header-store-display").innerText = window.currentStore.store_name;
+      document.getElementById("setting-store-name").value = window.currentStore.store_name;
+      document.getElementById("setting-store-phone").value = window.currentStore.owner_phone || "";
+      document.getElementById("setting-receipt-header").value = window.currentStore.store_name;
+
+      document.getElementById("setting-lic-expires").innerText = expiry.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+      document.getElementById("setting-lic-plan").innerText = "7-DAY TRIAL";
+      document.getElementById("setting-lic-status").innerText = window.currentStore.status || "active";
+      document.getElementById("setting-lic-login").innerText = window.currentStore.last_login_at ? new Date(window.currentStore.last_login_at).toLocaleString("en-IN") : "Just now";
+
+      document.getElementById("header-plan-display").innerText = `${daysLeft}d Trial Left`;
+
+      await loadCloudInventory();
+      await loadCloudSales();
+      window.addItemRow();
+    };
+
+    // 4. SUPER ADMIN PANEL
+    window.promptSuperAdminAccess = function() {
+      const email = prompt("Enter Super Admin Key / Email:");
+      if (!email) return;
+      const pass = prompt("Enter Super Admin Password:");
+      if (email === SUPER_ADMIN_EMAIL && pass === SUPER_ADMIN_PASS) {
+        openSuperAdminPanel();
+      } else {
+        alert("Access Denied: Invalid Master Credentials.");
+      }
+    };
+
+    window.openSuperAdminPanel = function() {
+      document.getElementById("modal-super-admin").classList.remove("hidden");
+      loadAdminStores();
+    };
+
+    window.exitAdminPanel = function() {
+      document.getElementById("modal-super-admin").classList.add("hidden");
+      if (window.currentStore) {
+        bootStoreSession();
+      } else {
+        document.getElementById("auth-modal").classList.remove("hidden");
+      }
+    };
+
+    window.loadAdminStores = async function() {
+      const tbody = document.getElementById("admin-stores-table-body");
+      tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center ui-subtext">Fetching stores from cloud...</td></tr>`;
+
+      const { data: stores, error } = await client.from("stores").select("*").order("created_at", { ascending: false });
+
+      if (error || !stores || !stores.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center ui-subtext">No stores registered yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = stores.map(st => {
+        const d = new Date(st.expires_at || Date.now());
+        const dateStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        const isSuspended = st.status === "SUSPENDED";
+        const loginStr = st.last_login_at 
+          ? new Date(st.last_login_at).toLocaleDateString("en-IN") + " at " + new Date(st.last_login_at).toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit', hour12:true }).toLowerCase() 
+          : "Never Logged In";
+
+        return `
+          <tr class="hover:bg-blue-600/5 transition">
+            <td class="px-4 py-3">
+              <span class="font-bold block text-sm" style="color: var(--text-main)">${st.store_name}</span>
+              <span class="text-[10px] ui-subtext font-mono block">${st.owner_email} • ${st.owner_phone || 'No phone'}</span>
+              <span class="text-[10px] text-amber-400 font-mono font-semibold block mt-0.5">🕒 Last Login: ${loginStr}</span>
+            </td>
+            <td class="px-3 py-3">
+              <input type="text" value="${st.plan_type || '₹299/mo'}" id="admin-fee-${st.id}" 
+                class="form-input text-xs w-24 font-bold font-mono py-1">
+            </td>
+            <td class="px-3 py-3">
+              <span class="text-[10px] px-2.5 py-0.5 rounded-full font-bold ${isSuspended ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'}">
+                ${st.status}
+              </span>
+            </td>
+            <td class="px-3 py-3 font-mono font-bold" style="color: var(--text-main)">
+              ${dateStr}
+            </td>
+            <td class="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
+              <button onclick="adminToggleStatus('${st.id}', '${st.status}')" class="px-2.5 py-1 rounded-lg ${isSuspended ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-600/20 text-rose-400 border border-rose-500/30'} text-[11px] font-bold">
+                ${isSuspended ? 'Activate' : 'Suspend'}
+              </button>
+              <button onclick="adminExtendDays('${st.id}', 30)" class="px-2.5 py-1 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/30 text-[11px] font-bold">
+                +30 Days
+              </button>
+              <button onclick="adminUpdateFee('${st.id}')" class="px-2.5 py-1 rounded-lg bg-slate-700 text-white text-[11px] font-bold">
+                Save Price
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    window.adminToggleStatus = async function(storeId, currentStatus) {
+      const nextStatus = currentStatus === "SUSPENDED" ? "ACTIVE" : "SUSPENDED";
+      await client.from("stores").update({ status: nextStatus }).eq("id", storeId);
+      loadAdminStores();
+    };
+
+    window.adminExtendDays = async function(storeId, days) {
+      const { data: store } = await client.from("stores").select("expires_at").eq("id", storeId).single();
+      let baseDate = new Date();
+      if (store && store.expires_at && new Date(store.expires_at) > baseDate) {
+        baseDate = new Date(store.expires_at);
+      }
+      baseDate.setDate(baseDate.getDate() + days);
+
+      await client.from("stores").update({ expires_at: baseDate.toISOString(), status: "ACTIVE" }).eq("id", storeId);
+      alert(`Store extended by ${days} days!`);
+      loadAdminStores();
+    };
+
+    window.adminUpdateFee = async function(storeId) {
+      const val = document.getElementById(`admin-fee-${storeId}`).value.trim();
+      await client.from("stores").update({ plan_type: val }).eq("id", storeId);
+      alert("Subscription price updated!");
+      loadAdminStores();
+    };
+
+    // 5. CLOUD INVENTORY
+    async function loadCloudInventory() {
+      const { data } = await client.from("products").select("*").eq("store_id", window.currentStore.id).order("name");
+      window.products = data || [];
+      renderInventory();
+    }
+
+    window.renderInventory = function() {
+      const q = (document.getElementById('inv-search').value || '').toLowerCase().trim();
+      const cat = document.getElementById('inv-filter-cat').value;
+      const stockFilter = document.getElementById('inv-filter-stock').value;
+
+      let list = window.products;
+
+      if (cat !== 'All') list = list.filter(p => p.category === cat);
+      if (stockFilter === 'InStock') list = list.filter(p => p.stock > p.reorder_level);
+      if (stockFilter === 'Reorder') list = list.filter(p => p.stock <= p.reorder_level);
+      if (q) list = list.filter(p => p.name.toLowerCase().includes(q) || (p.sku && p.sku.toLowerCase().includes(q)));
+
+      document.getElementById('inv-count-label').innerText = `${list.length} products`;
+
+      const tbody = document.getElementById('inventory-table-body');
+      tbody.innerHTML = list.map(p => {
+        const marginPct = (((p.price - (p.cost || 0)) / p.price) * 100).toFixed(1);
+        const stockVal = ((p.cost || 0) * (p.stock || 0)).toLocaleString('en-IN');
+        const isLow = (p.stock || 0) <= (p.reorder_level || 10);
+
+        return `
+          <tr class="hover:bg-blue-600/5 transition">
+            <td class="px-4 py-3">
+              <span class="font-bold block" style="color: var(--text-main)">${p.name}</span>
+              <span class="text-[10px] ui-subtext font-mono font-medium">${p.sku || '-'}</span>
+            </td>
+            <td class="px-3 py-3 font-bold font-mono" style="color: var(--text-main)">₹${parseFloat(p.price).toFixed(2)}</td>
+            <td class="px-3 py-3 ui-subtext font-mono font-bold">${marginPct}%</td>
+            <td class="px-3 py-3">
+              <span style="background-color: ${isLow ? 'var(--badge-amber-bg)' : 'var(--badge-green-bg)'}; color: ${isLow ? 'var(--badge-amber-txt)' : 'var(--badge-green-txt)'};" class="text-[10px] px-2.5 py-0.5 rounded-full font-bold">
+                ${isLow ? 'Reorder · ' : 'In Stock · '}${p.stock || 0}
+              </span>
+            </td>
+            <td class="px-3 py-3 font-mono font-bold" style="color: var(--text-main)">₹${stockVal}.00</td>
+            <td class="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
+              <button onclick="openAdjustModal('${p.id}')" class="px-2.5 py-1 rounded-lg bg-blue-600/15 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition text-[11px] font-bold">Adjust</button>
+              <button onclick="openEditModal('${p.id}')" class="px-2.5 py-1 rounded-lg custom-card hover:bg-slate-200 dark:hover:bg-stone-800 transition text-[11px] font-bold" style="color: var(--text-main)">Edit</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    window.commitSaveProduct = async function() {
+      const name = document.getElementById('prod-name').value.trim();
+      const sku = document.getElementById('prod-sku').value.trim();
+      const barcode = document.getElementById('prod-barcode').value.trim();
+      const category = document.getElementById('prod-category').value;
+      const tax = parseFloat(document.getElementById('prod-tax').value) || 5;
+      const cost = parseFloat(document.getElementById('prod-cost').value) || 0;
+      const price = parseFloat(document.getElementById('prod-price').value) || 0;
+      const stock = parseInt(document.getElementById('prod-stock').value) || 0;
+      const reorder = parseInt(document.getElementById('prod-reorder').value) || 10;
+
+      if (!name || !sku || price <= 0) return alert('Name, SKU aur Retail Price zaroori hain!');
+
+      const payload = {
+        store_id: window.currentStore.id,
+        sku, barcode, name, category,
+        tax_percent: tax, cost, price, stock, reorder_level: reorder
+      };
+
+      if (window.activeEditId) {
+        await client.from("products").update(payload).eq("id", window.activeEditId);
+      } else {
+        await client.from("products").insert([payload]);
+      }
+
+      toggleModal('modal-product-editor');
+      await loadCloudInventory();
+    };
+
+    window.commitStockAdjustment = async function() {
+      const p = window.products.find(x => x.id === window.activeAdjustId);
+      if (!p) return;
+      const delta = parseInt(document.getElementById('adjust-delta').value);
+      if (isNaN(delta) || delta === 0) return alert('Enter valid quantity (+/-)');
+
+      const newStock = Math.max(0, (p.stock || 0) + delta);
+      await client.from("products").update({ stock: newStock }).eq("id", p.id);
+
+      toggleModal('modal-adjust-stock');
+      await loadCloudInventory();
+    };
+
+    // 6. CLOUD SALES
+    async function loadCloudSales() {
+      const { data } = await client.from("sales").select("*").eq("store_id", window.currentStore.id).order("created_at", { ascending: false });
+      window.sales = data || [];
+      renderSales();
+    }
+
+    window.processBill = async function() {
+      const custNameInput = document.getElementById('cust-name');
+      const custName = custNameInput.value.trim();
+
+      if (!custName) {
+        alert('Customer name likhna zaroori hai!');
+        custNameInput.focus();
+        custNameInput.classList.add('border-rose-500');
+        setTimeout(() => custNameInput.classList.remove('border-rose-500'), 2500);
+        return;
+      }
+
+      const rows = document.querySelectorAll('.item-entry-row');
+      let billItems = [];
+      let totalAmount = 0;
+
+      for (let row of rows) {
+        const select = row.querySelector('.product-select');
+        const qtyInput = row.querySelector('.qty-input');
+        const selected = select.options[select.selectedIndex];
+
+        if (selected && selected.value) {
+          const p = window.products.find(x => x.id === selected.value);
+          const qty = parseInt(qtyInput.value) || 1;
+          if (p) {
+            billItems.push({
+              id: p.id,
+              name: p.name,
+              sku: p.sku,
+              price: p.price,
+              qty: qty,
+              total: p.price * qty
+            });
+            totalAmount += p.price * qty;
+            const updatedStock = Math.max(0, (p.stock || 0) - qty);
+            await client.from("products").update({ stock: updatedStock }).eq("id", p.id);
+          }
+        }
+      }
+
+      if (billItems.length === 0) {
+        alert('Please choose at least one product!');
+        return;
+      }
+
+      const custPhone = document.getElementById('cust-phone').value.trim() || 'N/A';
+      const payMode = document.getElementById('payment-mode').value;
+      const note = document.getElementById('bill-note').value.trim();
+      const invoiceNo = 'INV-' + Math.floor(100000 + Math.random() * 900000);
+
+      const invoiceRecord = {
+        store_id: window.currentStore.id,
+        invoice_no: invoiceNo,
+        customer_name: custName,
+        customer_phone: custPhone,
+        mode: payMode,
+        note: note,
+        total: totalAmount,
+        items: billItems
+      };
+
+      const { data, error } = await client.from("sales").insert([invoiceRecord]).select().single();
+      if (error) {
+        alert("Failed to save bill: " + error.message);
+        return;
+      }
+
+      window.executeDirectPrint({
+        invoiceNo: data.invoice_no,
+        dateTime: new Date(data.created_at).toLocaleString('en-IN'),
+        customer: data.customer_name,
+        phone: data.customer_phone,
+        mode: data.mode,
+        note: data.note,
+        total: data.total,
+        items: data.items
+      });
+
+      document.getElementById('items-rows-container').innerHTML = '';
+      window.rowCounter = 0;
+      window.addItemRow();
+      custNameInput.value = '';
+      document.getElementById('cust-phone').value = '';
+      document.getElementById('bill-note').value = '';
+      window.calculateBillTotal();
+
+      await loadCloudInventory();
+      await loadCloudSales();
+    };
+
+    // 7. COUNTER SEARCH & ROWS
+    window.handleSearchSuggestions = function(query) {
+      const dropdown = document.getElementById('search-suggestions-dropdown');
+      const q = query.trim().toLowerCase();
+
+      if (!q) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      const matches = window.products.filter(p => 
+        p.name.toLowerCase().includes(q) || 
+        (p.sku && p.sku.toLowerCase().includes(q)) || 
+        (p.barcode && p.barcode.includes(q))
+      );
+
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<p class="text-xs ui-subtext p-3 text-center">No stocks found.</p>';
+      } else {
+        dropdown.innerHTML = matches.map(p => {
+          const isLow = (p.stock || 0) <= (p.reorder_level || 10);
+          return `
+            <div onclick="pickProductFromSearch('${p.id}')" class="p-2.5 flex items-center justify-between hover:bg-blue-600/10 cursor-pointer transition">
+              <div>
+                <p class="font-bold text-xs" style="color: var(--text-main)">${p.name}</p>
+                <span class="text-[10px] ui-subtext font-mono">${p.sku || '-'}</span>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">₹${parseFloat(p.price).toFixed(2)}</span>
+                <span style="background-color: ${isLow ? 'var(--badge-amber-bg)' : 'var(--badge-green-bg)'}; color: ${isLow ? 'var(--badge-amber-txt)' : 'var(--badge-green-txt)'};" class="block text-[9px] px-2 py-0.5 rounded-full font-bold mt-0.5">
+                  ${isLow ? 'Reorder · ' : 'In Stock · '}${p.stock || 0}
+                </span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      dropdown.classList.remove('hidden');
+    };
+
+    window.pickProductFromSearch = function(productId) {
+      document.getElementById('search-suggestions-dropdown').classList.add('hidden');
+      document.getElementById('product-search-input').value = '';
+
+      const rows = document.querySelectorAll('.item-entry-row');
+      let filled = false;
+      for (let row of rows) {
+        const select = row.querySelector('.product-select');
+        if (!select.value) {
+          select.value = productId;
+          filled = true;
+          break;
+        }
+      }
+
+      if (!filled) {
+        window.addItemRow(productId);
+      }
+      window.calculateBillTotal();
+    };
+
+    window.addItemRow = function(preselectedId = '') {
+      window.rowCounter++;
+      const container = document.getElementById('items-rows-container');
+      const rowId = `row_${window.rowCounter}`;
+
+      const rowDiv = document.createElement('div');
+      rowDiv.id = rowId;
+      rowDiv.className = 'flex items-center gap-1.5 item-entry-row';
+
+      rowDiv.innerHTML = `
+        <select class="flex-1 min-w-0 form-input cursor-pointer product-select text-xs truncate font-medium" onchange="calculateBillTotal()">
+          <option value="">Choose product</option>
+          ${window.products.map(p => `
+            <option value="${p.id}" data-price="${p.price}" data-stock="${p.stock}" ${p.id === preselectedId ? 'selected' : ''}>
+              ${p.name} — ₹${parseFloat(p.price).toFixed(2)} · (${p.stock || 0} left)
+            </option>
+          `).join('')}
+        </select>
+        <input type="number" min="1" value="1" class="w-14 form-input text-center font-bold text-xs qty-input shrink-0" oninput="calculateBillTotal()">
+        <button onclick="removeRow('${rowId}')" class="p-2 text-rose-500 hover:text-rose-400 text-sm font-bold shrink-0">🗑️</button>
+      `;
+
+      container.appendChild(rowDiv);
+      calculateBillTotal();
+    };
+
+    window.removeRow = function(rowId) {
+      const rows = document.querySelectorAll('.item-entry-row');
+      if (rows.length <= 1) {
+        alert('Bill must contain at least one row!');
+        return;
+      }
+      const el = document.getElementById(rowId);
+      if (el) el.remove();
+      calculateBillTotal();
+    };
+
+    window.calculateBillTotal = function() {
+      const rows = document.querySelectorAll('.item-entry-row');
+      let grandTotal = 0;
+      let count = 0;
+
+      rows.forEach(row => {
+        const select = row.querySelector('.product-select');
+        const qtyInput = row.querySelector('.qty-input');
+        const selected = select.options[select.selectedIndex];
+
+        if (selected && selected.value) {
+          const price = parseFloat(selected.getAttribute('data-price')) || 0;
+          const qty = parseInt(qtyInput.value) || 1;
+          grandTotal += price * qty;
+          count += qty;
+        }
+      });
+
+      document.getElementById('grand-total-display').innerText = grandTotal.toFixed(2);
+      document.getElementById('items-count-badge').innerText = `${count} item(s)`;
+    };
+
+    // 8. PRINT RECEIPT
+    window.executeDirectPrint = function(inv) {
+      const cfg = window.storeConfig || {};
+      const printDiv = document.getElementById('printable-receipt-area');
+
+      const subtotal = inv.total;
+      const taxAmount = (subtotal * 0.05);
+      const cgst = (taxAmount / 2).toFixed(2);
+      const sgst = (taxAmount / 2).toFixed(2);
+
+      printDiv.innerHTML = `
+        <div style="text-align: center; border-bottom: 1px dashed #000; padding-bottom: 5px; margin-bottom: 5px;">
+          <h2 style="font-size: 14px; margin: 0; font-weight: bold; color: #000;">${window.currentStore ? window.currentStore.store_name : (cfg.header || 'MARTFLOW STORE')}</h2>
+          ${cfg.address ? `<p style="margin: 2px 0; font-size: 10px; color: #000;">${cfg.address}</p>` : ''}
+          ${window.currentStore && window.currentStore.owner_phone ? `<p style="margin: 2px 0; font-size: 10px; color: #000;">Phone: ${window.currentStore.owner_phone}</p>` : ''}
+          ${cfg.gstin ? `<p style="margin: 2px 0; font-size: 10px; font-weight: bold; color: #000;">GSTIN: ${cfg.gstin}</p>` : ''}
+          <p style="margin: 2px 0; font-size: 10px; color: #000;">Date: ${inv.dateTime}</p>
+          <p style="margin: 2px 0; font-weight: bold; color: #000;">${inv.invoiceNo}</p>
+        </div>
+
+        <div style="margin-bottom: 5px; color: #000; font-size: 11px;">
+          <div>Customer: <strong>${inv.customer}</strong></div>
+          <div>Mobile: <span>${inv.phone}</span></div>
+          ${inv.note ? `<div>Note: <span>${inv.note}</span></div>` : ''}
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 5px;">
+          <thead>
+            <tr style="border-bottom: 1px dashed #000; text-align: left;">
+              <th style="color: #000;">Item</th>
+              <th style="text-align: center; color: #000;">Qty</th>
+              <th style="text-align: right; color: #000;">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(inv.items || []).map(i => `
+              <tr>
+                <td style="color: #000;">${i.name}</td>
+                <td style="text-align: center; color: #000;">${i.qty}</td>
+                <td style="text-align: right; color: #000;">₹${parseFloat(i.total || (i.price * i.qty)).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div style="border-top: 1px dashed #000; padding-top: 4px; color: #000; font-size: 11px;">
+          <div style="display: flex; justify-content: space-between;"><span>Subtotal:</span><span>₹${subtotal.toFixed(2)}</span></div>
+          ${cfg.splitTax ? `
+            <div style="display: flex; justify-content: space-between; font-size: 10px;"><span>CGST (2.5%):</span><span>₹${cgst}</span></div>
+            <div style="display: flex; justify-content: space-between; font-size: 10px;"><span>SGST (2.5%):</span><span>₹${sgst}</span></div>
+          ` : ''}
+          <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; margin-top: 4px; border-top: 1px dashed #000; padding-top: 4px;">
+            <span>GRAND TOTAL:</span>
+            <span>₹${parseFloat(inv.total).toFixed(2)}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px;">
+            <span>Payment Mode:</span><span>${inv.mode}</span>
+          </div>
+          ${cfg.upi ? `<div style="font-size: 9px; text-align: center; margin-top: 2px;">UPI: ${cfg.upi}</div>` : ''}
+        </div>
+
+        <div style="text-align: center; margin-top: 8px; font-size: 9px; color: #000; border-top: 1px dashed #000; padding-top: 4px;">
+          ${cfg.footer ? `<p style="margin: 2px 0;">${cfg.footer}</p>` : ''}
+          ${cfg.policy ? `<p style="margin: 2px 0;">${cfg.policy}</p>` : ''}
+          <p style="margin: 4px 0 0 0; font-weight: bold;">*** THANK YOU - VISIT AGAIN ***</p>
+        </div>
+      `;
+
+      setTimeout(() => { window.print(); }, 50);
+    };
+
+    // 9. SALES LEDGER & DETAILS
+    window.renderSales = function() {
+      document.getElementById('stat-total-bills').innerText = window.sales.length;
+      const total = window.sales.reduce((a, s) => a + parseFloat(s.total || 0), 0);
+      document.getElementById('stat-total-amount').innerText = `₹${total.toFixed(2)}`;
+
+      const list = document.getElementById('sales-ledger-list');
+      if (window.sales.length === 0) {
+        list.innerHTML = '<p class="text-center ui-subtext py-6 text-xs font-semibold">No transactions recorded today.</p>';
+      } else {
+        list.innerHTML = window.sales.map((s, index) => {
+          let badgeBg = '#1e293b';
+          let badgeColor = '#94a3b8';
+          let badgeBorder = '#334155';
+          const modeUpper = (s.mode || '').toUpperCase();
+
+          if (modeUpper.includes('CASH')) {
+            badgeBg = window.currentTheme === 'dark' ? 'rgba(6, 78, 59, 0.7)' : '#dcfce7';
+            badgeColor = window.currentTheme === 'dark' ? '#34d399' : '#15803d';
+            badgeBorder = window.currentTheme === 'dark' ? '#065f46' : '#86efac';
+          } else if (modeUpper.includes('UPI')) {
+            badgeBg = window.currentTheme === 'dark' ? 'rgba(88, 28, 135, 0.7)' : '#f3e8ff';
+            badgeColor = window.currentTheme === 'dark' ? '#c084fc' : '#7e22ce';
+            badgeBorder = window.currentTheme === 'dark' ? '#6b21a8' : '#d8b4fe';
+          } else if (modeUpper.includes('CARD')) {
+            badgeBg = window.currentTheme === 'dark' ? 'rgba(30, 58, 138, 0.7)' : '#dbeafe';
+            badgeColor = window.currentTheme === 'dark' ? '#60a5fa' : '#1d4ed8';
+            badgeBorder = window.currentTheme === 'dark' ? '#1e40af' : '#93c5fd';
+          }
+
+          const d = new Date(s.created_at || Date.now());
+          const dateStr = d.toLocaleDateString("en-IN") + " " + d.toLocaleTimeString("en-US", { hour: '2-digit', minute:'2-digit' });
+
+          return `
+            <div class="py-2.5 flex items-center justify-between hover:bg-blue-600/5 px-2 rounded-xl transition">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-xs text-blue-600 dark:text-blue-400 font-mono">${s.invoice_no}</span>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full font-bold font-mono border" style="background-color: ${badgeBg}; color: ${badgeColor}; border-color: ${badgeBorder}">${s.mode}</span>
+                  <span class="text-[10px] ui-subtext font-semibold">${s.items ? s.items.length : 1} item(s)</span>
+                </div>
+                <p class="text-[10px] ui-subtext mt-0.5">${dateStr} • <strong style="color: var(--text-main)">${s.customer_name || 'Customer'}</strong></p>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="font-bold text-xs font-mono text-emerald-600 dark:text-emerald-400">₹${parseFloat(s.total).toFixed(2)}</span>
+                <button onclick="viewInvoiceDetails(${index})" class="px-2.5 py-1 rounded-lg bg-blue-600/15 text-blue-600 dark:text-blue-400 hover:bg-blue-600 hover:text-white transition text-[11px] font-bold cursor-pointer">View Bill</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    };
+
+    window.viewInvoiceDetails = function(index) {
+      const inv = window.sales[index];
+      if (!inv) return;
+
+      window.activeDetailInvoice = inv;
+      const d = new Date(inv.created_at || Date.now()).toLocaleString('en-IN');
+
+      document.getElementById('detail-invoice-no').innerText = inv.invoice_no;
+      document.getElementById('detail-invoice-date').innerText = d;
+      document.getElementById('detail-cust-name').innerText = inv.customer_name || '-';
+      document.getElementById('detail-cust-phone').innerText = inv.customer_phone || 'N/A';
+      document.getElementById('detail-pay-mode').innerText = inv.mode;
+      document.getElementById('detail-total-amount').innerText = `₹${parseFloat(inv.total).toFixed(2)}`;
+
+      const itemsContainer = document.getElementById('detail-items-list');
+      if (!inv.items || inv.items.length === 0) {
+        itemsContainer.innerHTML = '<p class="text-xs ui-subtext p-3 text-center">No item records found for this invoice.</p>';
+      } else {
+        itemsContainer.innerHTML = inv.items.map(item => `
+          <div class="p-2.5 flex items-center justify-between text-xs">
+            <div>
+              <p class="font-bold" style="color: var(--text-main)">${item.name}</p>
+              <span class="text-[10px] ui-subtext font-mono font-medium">₹${parseFloat(item.price).toFixed(2)} × ${item.qty}</span>
+            </div>
+            <span class="font-bold font-mono text-emerald-600 dark:text-emerald-400">₹${parseFloat(item.total || (item.price * item.qty)).toFixed(2)}</span>
+          </div>
+        `).join('');
+      }
+
+      document.getElementById('modal-invoice-detail').classList.remove('hidden');
+    };
+
+    window.closeInvoiceModal = function() {
+      document.getElementById('modal-invoice-detail').classList.add('hidden');
+    };
+
+    window.reprintActiveInvoice = function() {
+      if (window.activeDetailInvoice) {
+        const inv = window.activeDetailInvoice;
+        window.executeDirectPrint({
+          invoiceNo: inv.invoice_no,
+          dateTime: new Date(inv.created_at).toLocaleString('en-IN'),
+          customer: inv.customer_name,
+          phone: inv.customer_phone,
+          mode: inv.mode,
+          note: inv.note,
+          total: inv.total,
+          items: inv.items
+        });
+      }
+    };
+
+    // 10. HELPERS
+    window.openAdjustModal = function(id) {
+      window.activeAdjustId = id;
+      const p = window.products.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('adjust-title').innerText = `Adjust stock — ${p.name}`;
+      document.getElementById('adjust-subtitle').innerText = `Current: ${p.stock || 0} · stamped with date & time`;
+      document.getElementById('adjust-delta').value = '';
+      document.getElementById('adjust-note').value = '';
+      document.getElementById('adjust-preview-badge').innerText = `${p.stock || 0} units after adjustment`;
+      toggleModal('modal-adjust-stock');
+    };
+
+    window.previewAdjustMath = function() {
+      const p = window.products.find(x => x.id === window.activeAdjustId);
+      if (!p) return;
+      const delta = parseInt(document.getElementById('adjust-delta').value) || 0;
+      const result = Math.max(0, (p.stock || 0) + delta);
+      document.getElementById('adjust-preview-badge').innerText = `${result} units after adjustment`;
+    };
+
+    window.openAddProductModal = function() {
+      window.activeEditId = null;
+      document.getElementById('editor-title').innerText = 'Add New Product';
+      document.getElementById('prod-sku').value = 'SKU-' + Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('prod-barcode').value = '';
+      document.getElementById('prod-name').value = '';
+      document.getElementById('prod-category').value = 'Grocery';
+      document.getElementById('prod-tax').value = '5';
+      document.getElementById('prod-cost').value = '';
+      document.getElementById('prod-price').value = '';
+      document.getElementById('prod-stock').value = '';
+      document.getElementById('prod-reorder').value = '10';
+      toggleModal('modal-product-editor');
+    };
+
+    window.openEditModal = function(id) {
+      window.activeEditId = id;
+      const p = window.products.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('editor-title').innerText = `Edit ${p.name}`;
+      document.getElementById('prod-sku').value = p.sku || '';
+      document.getElementById('prod-barcode').value = p.barcode || '';
+      document.getElementById('prod-name').value = p.name;
+      document.getElementById('prod-category').value = p.category || 'Grocery';
+      document.getElementById('prod-tax').value = p.tax_percent || 5;
+      document.getElementById('prod-cost').value = p.cost || '';
+      document.getElementById('prod-price').value = p.price || '';
+      document.getElementById('prod-stock').value = p.stock || 0;
+      document.getElementById('prod-reorder').value = p.reorder_level || 10;
+      toggleModal('modal-product-editor');
+    };
+
+    window.toggleModal = function(id) {
+      document.getElementById(id).classList.toggle('hidden');
+    };
+
+    window.toggleTheme = function() {
+      window.currentTheme = window.currentTheme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('mf_pro_theme', window.currentTheme);
+      document.body.className = `theme-${window.currentTheme} min-h-screen flex flex-col pb-16 select-none`;
+      document.getElementById('theme-btn-icon').innerText = window.currentTheme === 'dark' ? '☀️' : '🌙';
+      renderSales();
+    };
+
+    window.switchView = function(view) {
+      ['billing', 'inventory', 'sales', 'settings'].forEach(v => {
+        document.getElementById(`view-${v}`).classList.add('hidden');
+        const b = document.getElementById(`tab-btn-${v}`);
+        b.className = 'px-3.5 py-1.5 rounded-xl text-xs nav-tab-inactive whitespace-nowrap transition';
+      });
+
+      const active = document.getElementById(`view-${view}`);
+      active.classList.remove('hidden');
+
+      const activeBtn = document.getElementById(`tab-btn-${view}`);
+      activeBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs nav-tab-active whitespace-nowrap transition';
+
+      if (view === 'inventory') renderInventory();
+      if (view === 'sales') renderSales();
+    };
+
+    window.saveStoreSettings = function() {
+      window.storeConfig = {
+        name: document.getElementById('setting-store-name').value.trim() || 'MartFlow Store',
+        address: document.getElementById('setting-store-address').value.trim(),
+        phone: document.getElementById('setting-store-phone').value.trim(),
+        gstin: document.getElementById('setting-store-gst').value.trim(),
+        currency: document.getElementById('setting-store-currency').value,
+        upi: document.getElementById('setting-store-upi').value.trim(),
+        header: document.getElementById('setting-receipt-header').value.trim() || 'MartFlow Store',
+        footer: document.getElementById('setting-receipt-footer').value.trim(),
+        policy: document.getElementById('setting-receipt-policy').value.trim(),
+        splitTax: document.getElementById('setting-tax-split').checked
+      };
+
+      localStorage.setItem('mf_store_config', JSON.stringify(window.storeConfig));
+      alert('Store settings saved successfully!');
+    };
+
+    window.exportCSV = function() {
+      let csv = "SKU,Product Name,Category,Cost,Retail Price,Stock,Stock Value\n";
+      window.products.forEach(p => {
+        csv += `"${p.sku || ''}","${p.name}","${p.category}",${p.cost || 0},${p.price},${p.stock || 0},${(p.cost || 0) * (p.stock || 0)}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', 'inventory_export.csv');
+      a.click();
+    };
+
+    // 11. INITIALIZER
+    window.onload = function() {
+      const clockEl = document.getElementById('current-clock');
+      setInterval(() => {
+        clockEl.innerText = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      }, 1000);
+
+      setInterval(() => {
+        if (window.currentStore) {
+          const expiry = new Date(window.currentStore.expires_at || Date.now());
+          if (new Date() > expiry) {
+            window.doLogout();
+          }
+        }
+      }, 60000);
+
+      const savedStore = localStorage.getItem("martflow_active_store");
+      if (savedStore) {
+        window.currentStore = JSON.parse(savedStore);
+        document.getElementById("auth-modal").classList.add("hidden");
+        bootStoreSession();
+      } else {
+        document.getElementById("auth-modal").classList.remove("hidden");
+        window.setAuthTab("SHOP_REG");
+        window.clearAuthInputs();
+      }
+    };
+  </script>
+</body>
+</html>
